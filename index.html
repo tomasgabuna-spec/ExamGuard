@@ -1,186 +1,1018 @@
-<header class="topbar">
+<div class="app-shell">
+
+  <!-- ================= TOP NAVIGATION ================= -->
+  <header class="topbar">
     <div class="brand">
-      <div class="brand-mark">EG</div>
+      <div class="brand-icon">EG</div>
       <div>
         <h1>EXAMGUARD</h1>
-        <p>Secure Examination & Monitoring System</p>
+        <span>Offline Secure Examination & Monitoring System</span>
       </div>
     </div>
-    <div class="top-actions">
-      <span id="connectionBadge" class="badge online">LOCAL</span>
-      <button class="btn ghost" id="resetDemoBtn">Reset Demo</button>
+
+    <div class="topbar-right">
+      <span id="networkStatus" class="network-status">
+        <i></i> LOCAL MODE
+      </span>
+
+      <button class="top-btn" onclick="showHome()">
+        Home
+      </button>
     </div>
   </header>
 
-  <main class="container">
-    <section id="homeView" class="view active">
-      <div class="hero">
-        <div>
-          <span class="eyebrow">EXAM MANAGEMENT</span>
-          <h2>Run secure, organized examinations.</h2>
-          <p>Create exams, randomize questions, monitor student status, score automatically, and export results.</p>
-          <div class="hero-actions">
-            <button class="btn primary" data-view="teacherLoginView">Teacher Portal</button>
-            <button class="btn secondary" data-view="studentJoinView">Student Portal</button>
+
+  <!-- ================= HOME ================= -->
+  <main id="homeScreen" class="screen active">
+
+    <section class="hero">
+      <div class="hero-content">
+
+        <div class="hero-label">
+          SECURE • RANDOMIZED • MONITORED
+        </div>
+
+        <h2>
+          EXAMINATION<br>
+          <span>WITHOUT THE INTERNET.</span>
+        </h2>
+
+        <p>
+          A local-network examination platform designed for teachers
+          to administer randomized assessments, monitor student status,
+          automatically score examinations, and download results.
+        </p>
+
+        <div class="hero-buttons">
+          <button class="primary-btn" onclick="showTeacherLogin()">
+            👩‍🏫 Teacher Dashboard
+          </button>
+
+          <button class="secondary-btn" onclick="showStudentJoin()">
+            📱 Student Portal
+          </button>
+        </div>
+
+      </div>
+
+      <div class="hero-visual">
+
+        <div class="shield-card">
+          <div class="shield">
+            🛡️
+          </div>
+
+          <h3>EXAMGUARD</h3>
+
+          <p>
+            Local Examination Server
+          </p>
+
+          <div class="secure-line">
+            <span></span>
+            SECURE LOCAL SESSION
           </div>
         </div>
-        <div class="hero-card">
-          <div class="shield">✓</div>
-          <h3>EXAMGUARD</h3>
-          <p>Randomized assessment • Timer • Status monitoring • Results</p>
-        </div>
+
+      </div>
+    </section>
+
+
+    <!-- FEATURES -->
+    <section class="feature-section">
+
+      <div class="section-heading">
+        <span>CORE CAPABILITIES</span>
+        <h2>Everything needed for a controlled examination</h2>
       </div>
 
       <div class="feature-grid">
-        <article><b>Randomized Questions</b><span>Each student receives a different question order.</span></article>
-        <article><b>Live Status</b><span>Track waiting, answering, interrupted, submitted and disconnected states.</span></article>
-        <article><b>Automatic Scoring</b><span>Answers are scored immediately after submission.</span></article>
-        <article><b>Download Results</b><span>Export class results as CSV for Excel or Google Sheets.</span></article>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔀</div>
+          <h3>Randomized Assessment</h3>
+          <p>
+            Each student can receive a different question order.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📡</div>
+          <h3>Live Monitoring</h3>
+          <p>
+            Monitor student examination status from the teacher dashboard.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⏱️</div>
+          <h3>Exam Timer</h3>
+          <p>
+            Automatically track remaining examination time.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Automatic Scoring</h3>
+          <p>
+            Calculate scores and percentages immediately after submission.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📥</div>
+          <h3>Download Results</h3>
+          <p>
+            Export examination results to CSV for spreadsheet processing.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🖨️</div>
+          <h3>Print Reports</h3>
+          <p>
+            Generate a printable examination results report.
+          </p>
+        </div>
+
       </div>
     </section>
 
-    <section id="teacherLoginView" class="view">
-      <div class="panel narrow">
-        <div class="panel-head">
-          <div><span class="eyebrow">TEACHER PORTAL</span><h2>Teacher Login</h2></div>
-          <button class="icon-btn" data-view="homeView">×</button>
-        </div>
-        <label>Teacher PIN</label>
-        <input id="teacherPin" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN">
-        <p class="muted">Demo PIN: <b>1234</b></p>
-        <button class="btn primary full" id="teacherLoginBtn">Sign In</button>
-        <div id="teacherLoginMsg" class="message"></div>
+
+    <!-- WORKFLOW -->
+    <section class="workflow-section">
+
+      <div class="section-heading">
+        <span>EXAMGUARD WORKFLOW</span>
+        <h2>From examination creation to results</h2>
       </div>
+
+      <div class="workflow">
+
+        <div class="workflow-step">
+          <strong>01</strong>
+          <span>Create Class</span>
+        </div>
+
+        <div class="workflow-line"></div>
+
+        <div class="workflow-step">
+          <strong>02</strong>
+          <span>Create Exam</span>
+        </div>
+
+        <div class="workflow-line"></div>
+
+        <div class="workflow-step">
+          <strong>03</strong>
+          <span>Generate Code</span>
+        </div>
+
+        <div class="workflow-line"></div>
+
+        <div class="workflow-step">
+          <strong>04</strong>
+          <span>Students Join</span>
+        </div>
+
+        <div class="workflow-line"></div>
+
+        <div class="workflow-step">
+          <strong>05</strong>
+          <span>Monitor</span>
+        </div>
+
+        <div class="workflow-line"></div>
+
+        <div class="workflow-step">
+          <strong>06</strong>
+          <span>Results</span>
+        </div>
+
+      </div>
+
     </section>
 
-    <section id="teacherView" class="view">
-      <div class="dashboard-head">
-        <div><span class="eyebrow">TEACHER DASHBOARD</span><h2>EXAMGUARD Control Center</h2></div>
-        <button class="btn ghost" id="teacherLogoutBtn">Log out</button>
-      </div>
-
-      <div class="stats">
-        <div class="stat"><span>Classes</span><strong id="statClasses">0</strong></div>
-        <div class="stat"><span>Questions</span><strong id="statQuestions">0</strong></div>
-        <div class="stat"><span>Exams</span><strong id="statExams">0</strong></div>
-        <div class="stat"><span>Attempts</span><strong id="statAttempts">0</strong></div>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" data-tab="manageTab">Manage</button>
-        <button class="tab" data-tab="monitorTab">Monitor</button>
-        <button class="tab" data-tab="resultsTab">Results</button>
-      </div>
-
-      <div id="manageTab" class="tab-panel active">
-        <div class="two-col">
-          <div class="panel">
-            <div class="panel-head"><h3>Create Class</h3></div>
-            <input id="className" placeholder="e.g. Grade 11 Mathematics">
-            <button class="btn primary full" id="addClassBtn">Add Class</button>
-            <div id="classList" class="list"></div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h3>Add Question</h3></div>
-            <select id="questionClass"></select>
-            <textarea id="questionText" rows="3" placeholder="Enter the question"></textarea>
-            <div class="choice-grid">
-              <input id="choiceA" placeholder="Choice A">
-              <input id="choiceB" placeholder="Choice B">
-              <input id="choiceC" placeholder="Choice C">
-              <input id="choiceD" placeholder="Choice D">
-            </div>
-            <div class="form-row">
-              <select id="correctAnswer">
-                <option value="A">Correct: A</option>
-                <option value="B">Correct: B</option>
-                <option value="C">Correct: C</option>
-                <option value="D">Correct: D</option>
-              </select>
-              <input id="questionPoints" type="number" min="1" value="1" placeholder="Points">
-            </div>
-            <button class="btn primary full" id="addQuestionBtn">Add Question</button>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head"><h3>Create Exam</h3></div>
-          <div class="form-grid">
-            <input id="examTitle" placeholder="Exam title">
-            <select id="examClass"></select>
-            <input id="examDuration" type="number" min="1" value="30" placeholder="Minutes">
-            <label class="check"><input id="randomizeQuestions" type="checkbox" checked> Randomize questions</label>
-          </div>
-          <button class="btn primary" id="createExamBtn">Create Exam</button>
-          <div id="examList" class="list"></div>
-        </div>
-      </div>
-
-      <div id="monitorTab" class="tab-panel">
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>Student Monitoring</h3><p class="muted">Demo mode stores activity in this browser.</p></div>
-            <select id="monitorExam"></select>
-          </div>
-          <div id="monitorTable" class="table-wrap"></div>
-        </div>
-      </div>
-
-      <div id="resultsTab" class="tab-panel">
-        <div class="panel">
-          <div class="panel-head">
-            <div><h3>Examination Results</h3><p class="muted">Export results as CSV.</p></div>
-            <button class="btn secondary" id="downloadCsvBtn">DOWNLOAD RESULTS</button>
-          </div>
-          <div id="resultsTable" class="table-wrap"></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="studentJoinView" class="view">
-      <div class="panel narrow">
-        <div class="panel-head">
-          <div><span class="eyebrow">STUDENT PORTAL</span><h2>Join Examination</h2></div>
-          <button class="icon-btn" data-view="homeView">×</button>
-        </div>
-        <label>Exam Code</label>
-        <input id="joinCode" maxlength="8" placeholder="e.g. GMX482">
-        <label>Student Name</label>
-        <input id="studentName" placeholder="Full name">
-        <label>Student ID</label>
-        <input id="studentId" placeholder="Student ID">
-        <button class="btn primary full" id="joinExamBtn">JOIN EXAM</button>
-        <div id="joinMsg" class="message"></div>
-        <p class="muted small">For this standalone version, the teacher and student use the same browser/device. Multi-device classroom monitoring requires a server/backend.</p>
-      </div>
-    </section>
-
-    <section id="studentExamView" class="view">
-      <div class="exam-head">
-        <div><span class="eyebrow">EXAMINATION</span><h2 id="studentExamTitle">Exam</h2><p id="studentIdentity" class="muted"></p></div>
-        <div class="timer-box"><span>TIME REMAINING</span><strong id="timer">00:00</strong></div>
-      </div>
-      <div class="progress"><div id="progressBar"></div></div>
-      <div id="questionArea" class="panel"></div>
-      <div class="exam-actions">
-        <button class="btn secondary" id="prevBtn">Previous</button>
-        <span id="questionCounter" class="muted"></span>
-        <button class="btn primary" id="nextBtn">Next</button>
-        <button class="btn danger hidden" id="submitExamBtn">SUBMIT EXAM</button>
-      </div>
-    </section>
-
-    <section id="studentResultView" class="view">
-      <div class="panel result-card">
-        <div class="result-icon">✓</div>
-        <span class="eyebrow">EXAM SUBMITTED</span>
-        <h2>Submission Recorded</h2>
-        <p id="studentResultText"></p>
-        <button class="btn primary" data-view="homeView">Return Home</button>
-      </div>
-    </section>
   </main>
 
+
+  <!-- ================= TEACHER LOGIN ================= -->
+  <section id="teacherLoginScreen" class="screen">
+
+    <div class="login-card">
+
+      <div class="login-logo">
+        🛡️
+      </div>
+
+      <div class="eyebrow">
+        TEACHER ACCESS
+      </div>
+
+      <h2>EXAMGUARD Teacher Portal</h2>
+
+      <p>
+        Enter your teacher PIN to access examination management.
+      </p>
+
+      <label>Teacher PIN</label>
+
+      <input
+        id="teacherPin"
+        type="password"
+        maxlength="8"
+        placeholder="Enter PIN"
+      >
+
+      <button class="primary-btn full" onclick="teacherLogin()">
+        SIGN IN
+      </button>
+
+      <button class="text-btn" onclick="showHome()">
+        ← Back to Home
+      </button>
+
+      <div id="loginMessage" class="form-message"></div>
+
+      <small>
+        Demo PIN: 1234
+      </small>
+
+    </div>
+
+  </section>
+
+
+  <!-- ================= TEACHER DASHBOARD ================= -->
+  <section id="teacherDashboard" class="screen">
+
+    <div class="dashboard-container">
+
+      <div class="dashboard-header">
+
+        <div>
+          <div class="eyebrow">
+            TEACHER CONTROL CENTER
+          </div>
+
+          <h2>EXAMGUARD Dashboard</h2>
+
+          <p>
+            Manage classes, examinations, monitoring and results.
+          </p>
+        </div>
+
+        <div class="dashboard-actions">
+          <button class="secondary-btn" onclick="showStudentJoin()">
+            Student Portal
+          </button>
+
+          <button class="danger-outline" onclick="teacherLogout()">
+            Logout
+          </button>
+        </div>
+
+      </div>
+
+
+      <!-- STATISTICS -->
+      <div class="stats-grid">
+
+        <div class="stat-card">
+          <div class="stat-icon blue">👥</div>
+          <div>
+            <span>Classes</span>
+            <strong id="classCount">0</strong>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon purple">📝</div>
+          <div>
+            <span>Questions</span>
+            <strong id="questionCount">0</strong>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon orange">📋</div>
+          <div>
+            <span>Exams</span>
+            <strong id="examCount">0</strong>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon green">📊</div>
+          <div>
+            <span>Submissions</span>
+            <strong id="submissionCount">0</strong>
+          </div>
+        </div>
+
+      </div>
+
+
+      <!-- TABS -->
+      <div class="dashboard-tabs">
+
+        <button
+          class="dash-tab active"
+          onclick="openTeacherTab('overviewTab',this)"
+        >
+          Overview
+        </button>
+
+        <button
+          class="dash-tab"
+          onclick="openTeacherTab('classesTab',this)"
+        >
+          Classes
+        </button>
+
+        <button
+          class="dash-tab"
+          onclick="openTeacherTab('questionsTab',this)"
+        >
+          Question Bank
+        </button>
+
+        <button
+          class="dash-tab"
+          onclick="openTeacherTab('examsTab',this)"
+        >
+          Exams & Quizzes
+        </button>
+
+        <button
+          class="dash-tab"
+          onclick="openTeacherTab('monitorTab',this)"
+        >
+          Live Monitoring
+        </button>
+
+        <button
+          class="dash-tab"
+          onclick="openTeacherTab('resultsTab',this)"
+        >
+          Results
+        </button>
+
+      </div>
+
+
+      <!-- ================= OVERVIEW ================= -->
+      <div id="overviewTab" class="teacher-tab active">
+
+        <div class="two-column">
+
+          <div class="panel">
+
+            <div class="panel-title">
+              <div>
+                <span>ACTIVE EXAMINATION</span>
+                <h3>Current Examination</h3>
+              </div>
+
+              <span class="live-pill">
+                ● LIVE
+              </span>
+            </div>
+
+            <div id="activeExamCard">
+              <div class="empty-state">
+                No active examination.
+              </div>
+            </div>
+
+          </div>
+
+
+          <div class="panel">
+
+            <div class="panel-title">
+              <div>
+                <span>QUICK ACTIONS</span>
+                <h3>Examination Control</h3>
+              </div>
+            </div>
+
+            <div class="quick-actions">
+
+              <button onclick="openTeacherTab('classesTab')">
+                ➕ Create Class
+              </button>
+
+              <button onclick="openTeacherTab('questionsTab')">
+                ➕ Add Question
+              </button>
+
+              <button onclick="openTeacherTab('examsTab')">
+                📝 Create Exam
+              </button>
+
+              <button onclick="openTeacherTab('monitorTab')">
+                📡 Monitor Students
+              </button>
+
+              <button onclick="openTeacherTab('resultsTab')">
+                📊 View Results
+              </button>
+
+              <button onclick="downloadResults()">
+                ⬇ Download Results
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= CLASSES ================= -->
+      <div id="classesTab" class="teacher-tab">
+
+        <div class="two-column">
+
+          <div class="panel">
+
+            <div class="panel-title">
+              <div>
+                <span>CLASS MANAGEMENT</span>
+                <h3>Create a Class</h3>
+              </div>
+            </div>
+
+            <label>Class Name</label>
+
+            <input
+              id="newClassName"
+              placeholder="Example: Grade 11 Mathematics"
+            >
+
+            <button
+              class="primary-btn full"
+              onclick="createClass()"
+            >
+              CREATE CLASS
+            </button>
+
+          </div>
+
+
+          <div class="panel">
+
+            <div class="panel-title">
+              <div>
+                <span>YOUR CLASSES</span>
+                <h3>Class List</h3>
+              </div>
+            </div>
+
+            <div id="classList"></div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= QUESTIONS ================= -->
+      <div id="questionsTab" class="teacher-tab">
+
+        <div class="panel">
+
+          <div class="panel-title">
+            <div>
+              <span>QUESTION BANK</span>
+              <h3>Add Multiple-Choice Question</h3>
+            </div>
+          </div>
+
+          <label>Class</label>
+
+          <select id="questionClass"></select>
+
+          <label>Question</label>
+
+          <textarea
+            id="questionText"
+            rows="4"
+            placeholder="Enter the examination question..."
+          ></textarea>
+
+          <div class="choices-grid">
+
+            <input id="choiceA" placeholder="A. Choice">
+            <input id="choiceB" placeholder="B. Choice">
+            <input id="choiceC" placeholder="C. Choice">
+            <input id="choiceD" placeholder="D. Choice">
+
+          </div>
+
+          <div class="form-row">
+
+            <div>
+              <label>Correct Answer</label>
+
+              <select id="correctAnswer">
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Points</label>
+
+              <input
+                id="questionPoints"
+                type="number"
+                value="1"
+                min="1"
+              >
+            </div>
+
+          </div>
+
+          <button
+            class="primary-btn"
+            onclick="addQuestion()"
+          >
+            ADD QUESTION
+          </button>
+
+        </div>
+
+
+        <div class="panel">
+
+          <div class="panel-title">
+            <div>
+              <span>QUESTION BANK</span>
+              <h3>Existing Questions</h3>
+            </div>
+          </div>
+
+          <div id="questionList"></div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= EXAMS ================= -->
+      <div id="examsTab" class="teacher-tab">
+
+        <div class="panel">
+
+          <div class="panel-title">
+
+            <div>
+              <span>EXAMINATION MANAGEMENT</span>
+              <h3>Create Exam / Quiz</h3>
+            </div>
+
+          </div>
+
+          <div class="form-grid">
+
+            <div>
+              <label>Exam Title</label>
+              <input
+                id="examTitle"
+                placeholder="Example: General Mathematics — Term 1 Examination"
+              >
+            </div>
+
+            <div>
+              <label>Class</label>
+              <select id="examClass"></select>
+            </div>
+
+            <div>
+              <label>Duration (minutes)</label>
+              <input
+                id="examDuration"
+                type="number"
+                min="1"
+                value="30"
+              >
+            </div>
+
+            <div class="checkbox-box">
+
+              <input
+                id="randomizeExam"
+                type="checkbox"
+                checked
+              >
+
+              <label for="randomizeExam">
+                Randomize questions
+              </label>
+
+            </div>
+
+          </div>
+
+          <button
+            class="primary-btn"
+            onclick="createExam()"
+          >
+            CREATE EXAM
+          </button>
+
+        </div>
+
+
+        <div class="panel">
+
+          <div class="panel-title">
+
+            <div>
+              <span>EXAM LIST</span>
+              <h3>Examinations & Quizzes</h3>
+            </div>
+
+          </div>
+
+          <div id="examList"></div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= MONITORING ================= -->
+      <div id="monitorTab" class="teacher-tab">
+
+        <div class="panel">
+
+          <div class="panel-title">
+
+            <div>
+              <span>REAL-TIME MONITORING</span>
+              <h3>Student Examination Status</h3>
+            </div>
+
+            <select
+              id="monitorExam"
+              onchange="renderMonitor()"
+            ></select>
+
+          </div>
+
+
+          <div class="monitor-summary">
+
+            <div>
+              <span>Waiting</span>
+              <strong id="waitingCount">0</strong>
+            </div>
+
+            <div>
+              <span>Answering</span>
+              <strong id="answeringCount">0</strong>
+            </div>
+
+            <div>
+              <span>Interrupted</span>
+              <strong id="interruptedCount">0</strong>
+            </div>
+
+            <div>
+              <span>Submitted</span>
+              <strong id="submittedCount">0</strong>
+            </div>
+
+            <div>
+              <span>Exited</span>
+              <strong id="exitedCount">0</strong>
+            </div>
+
+          </div>
+
+
+          <div class="table-container">
+
+            <table>
+
+              <thead>
+
+                <tr>
+                  <th>Student</th>
+                  <th>ID</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Score</th>
+                  <th>Action</th>
+                </tr>
+
+              </thead>
+
+              <tbody id="monitorBody"></tbody>
+
+            </table>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= RESULTS ================= -->
+      <div id="resultsTab" class="teacher-tab">
+
+        <div class="panel">
+
+          <div class="results-header">
+
+            <div>
+              <span>EXAMINATION RESULTS</span>
+              <h3>Results & Performance</h3>
+            </div>
+
+            <div class="result-actions">
+
+              <button
+                class="secondary-btn"
+                onclick="downloadResults()"
+              >
+                ⬇ DOWNLOAD RESULTS
+              </button>
+
+              <button
+                class="secondary-btn"
+                onclick="printResults()"
+              >
+                🖨 PRINT / PDF
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <div class="table-container">
+
+            <table>
+
+              <thead>
+
+                <tr>
+                  <th>Student</th>
+                  <th>ID</th>
+                  <th>Exam</th>
+                  <th>Score</th>
+                  <th>Percentage</th>
+                  <th>Status</th>
+                  <th>Time Submitted</th>
+                </tr>
+
+              </thead>
+
+              <tbody id="resultsBody"></tbody>
+
+            </table>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- ================= STUDENT JOIN ================= -->
+  <section id="studentJoinScreen" class="screen">
+
+    <div class="student-join">
+
+      <div class="student-brand">
+        <div class="brand-icon">EG</div>
+
+        <h2>EXAMGUARD</h2>
+
+        <p>Student Examination Portal</p>
+      </div>
+
+      <div class="join-card">
+
+        <div class="eyebrow">
+          JOIN EXAMINATION
+        </div>
+
+        <h2>Enter Examination</h2>
+
+        <p>
+          Enter the examination code provided by your teacher.
+        </p>
+
+        <label>Exam Code</label>
+
+        <input
+          id="joinExamCode"
+          maxlength="8"
+          placeholder="Example: GMX482"
+        >
+
+        <label>Student Name</label>
+
+        <input
+          id="studentName"
+          placeholder="Enter your full name"
+        >
+
+        <label>Student ID</label>
+
+        <input
+          id="studentID"
+          placeholder="Enter student ID"
+        >
+
+        <button
+          class="primary-btn full"
+          onclick="joinExam()"
+        >
+          JOIN EXAMINATION
+        </button>
+
+        <div id="joinMessage" class="form-message"></div>
+
+        <button
+          class="text-btn"
+          onclick="showHome()"
+        >
+          ← Return to Home
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- ================= STUDENT EXAM ================= -->
+  <section id="studentExamScreen" class="screen">
+
+    <div class="student-exam-container">
+
+      <header class="exam-header">
+
+        <div>
+
+          <span class="eyebrow">
+            EXAMGUARD EXAMINATION
+          </span>
+
+          <h2 id="studentExamTitle">
+            Examination
+          </h2>
+
+          <p id="studentExamStudent"></p>
+
+        </div>
+
+        <div class="timer-card">
+
+          <span>TIME REMAINING</span>
+
+          <strong id="examTimer">
+            00:00
+          </strong>
+
+        </div>
+
+      </header>
+
+
+      <div class="exam-progress">
+
+        <div class="progress-info">
+
+          <span id="questionNumber">
+            Question 1 of 1
+          </span>
+
+          <span id="answeredNumber">
+            0 Answered
+          </span>
+
+        </div>
+
+        <div class="progress-track">
+          <div id="examProgress"></div>
+        </div>
+
+      </div>
+
+
+      <div class="question-card">
+
+        <div class="question-number" id="currentQuestionLabel">
+          QUESTION 1
+        </div>
+
+        <h2 id="currentQuestion">
+          Question
+        </h2>
+
+        <div
+          id="studentChoices"
+          class="student-choices"
+        ></div>
+
+      </div>
+
+
+      <div class="exam-navigation">
+
+        <button
+          class="secondary-btn"
+          onclick="previousQuestion()"
+        >
+          ← Previous
+        </button>
+
+        <span id="navCounter">
+          1 / 1
+        </span>
+
+        <button
+          id="nextQuestionBtn"
+          class="primary-btn"
+          onclick="nextQuestion()"
+        >
+          Next →
+        </button>
+
+        <button
+          id="submitExamBtn"
+          class="submit-btn hidden"
+          onclick="submitExam()"
+        >
+          SUBMIT EXAM
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- ================= STUDENT RESULT ================= -->
+  <section id="studentResultScreen" class="screen">
+
+    <div class="result-screen">
+
+      <div class="result-icon">
+        ✓
+      </div>
+
+      <div class="eyebrow">
+        EXAMINATION SUBMITTED
+      </div>
+
+      <h2>Submission Recorded</h2>
+
+      <p id="studentResultMessage"></p>
+
+      <div class="final-score">
+        <span>Your Score</span>
+        <strong id="studentFinalScore">
+          0/0
+        </strong>
+        <b id="studentFinalPercentage">
+          0%
+        </b>
+      </div>
+
+      <button
+        class="primary-btn"
+        onclick="showHome()"
+      >
+        RETURN TO HOME
+      </button>
+
+    </div>
+
+  </section>
+
+
+  <!-- ================= TOAST ================= -->
   <div id="toast" class="toast"></div>
-  <script src="script.js"></script>
+
+</div>
