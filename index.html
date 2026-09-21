@@ -1,0 +1,186 @@
+<header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">EG</div>
+      <div>
+        <h1>EXAMGUARD</h1>
+        <p>Secure Examination & Monitoring System</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="connectionBadge" class="badge online">LOCAL</span>
+      <button class="btn ghost" id="resetDemoBtn">Reset Demo</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="homeView" class="view active">
+      <div class="hero">
+        <div>
+          <span class="eyebrow">EXAM MANAGEMENT</span>
+          <h2>Run secure, organized examinations.</h2>
+          <p>Create exams, randomize questions, monitor student status, score automatically, and export results.</p>
+          <div class="hero-actions">
+            <button class="btn primary" data-view="teacherLoginView">Teacher Portal</button>
+            <button class="btn secondary" data-view="studentJoinView">Student Portal</button>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div class="shield">✓</div>
+          <h3>EXAMGUARD</h3>
+          <p>Randomized assessment • Timer • Status monitoring • Results</p>
+        </div>
+      </div>
+
+      <div class="feature-grid">
+        <article><b>Randomized Questions</b><span>Each student receives a different question order.</span></article>
+        <article><b>Live Status</b><span>Track waiting, answering, interrupted, submitted and disconnected states.</span></article>
+        <article><b>Automatic Scoring</b><span>Answers are scored immediately after submission.</span></article>
+        <article><b>Download Results</b><span>Export class results as CSV for Excel or Google Sheets.</span></article>
+      </div>
+    </section>
+
+    <section id="teacherLoginView" class="view">
+      <div class="panel narrow">
+        <div class="panel-head">
+          <div><span class="eyebrow">TEACHER PORTAL</span><h2>Teacher Login</h2></div>
+          <button class="icon-btn" data-view="homeView">×</button>
+        </div>
+        <label>Teacher PIN</label>
+        <input id="teacherPin" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN">
+        <p class="muted">Demo PIN: <b>1234</b></p>
+        <button class="btn primary full" id="teacherLoginBtn">Sign In</button>
+        <div id="teacherLoginMsg" class="message"></div>
+      </div>
+    </section>
+
+    <section id="teacherView" class="view">
+      <div class="dashboard-head">
+        <div><span class="eyebrow">TEACHER DASHBOARD</span><h2>EXAMGUARD Control Center</h2></div>
+        <button class="btn ghost" id="teacherLogoutBtn">Log out</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>Classes</span><strong id="statClasses">0</strong></div>
+        <div class="stat"><span>Questions</span><strong id="statQuestions">0</strong></div>
+        <div class="stat"><span>Exams</span><strong id="statExams">0</strong></div>
+        <div class="stat"><span>Attempts</span><strong id="statAttempts">0</strong></div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="manageTab">Manage</button>
+        <button class="tab" data-tab="monitorTab">Monitor</button>
+        <button class="tab" data-tab="resultsTab">Results</button>
+      </div>
+
+      <div id="manageTab" class="tab-panel active">
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head"><h3>Create Class</h3></div>
+            <input id="className" placeholder="e.g. Grade 11 Mathematics">
+            <button class="btn primary full" id="addClassBtn">Add Class</button>
+            <div id="classList" class="list"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>Add Question</h3></div>
+            <select id="questionClass"></select>
+            <textarea id="questionText" rows="3" placeholder="Enter the question"></textarea>
+            <div class="choice-grid">
+              <input id="choiceA" placeholder="Choice A">
+              <input id="choiceB" placeholder="Choice B">
+              <input id="choiceC" placeholder="Choice C">
+              <input id="choiceD" placeholder="Choice D">
+            </div>
+            <div class="form-row">
+              <select id="correctAnswer">
+                <option value="A">Correct: A</option>
+                <option value="B">Correct: B</option>
+                <option value="C">Correct: C</option>
+                <option value="D">Correct: D</option>
+              </select>
+              <input id="questionPoints" type="number" min="1" value="1" placeholder="Points">
+            </div>
+            <button class="btn primary full" id="addQuestionBtn">Add Question</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h3>Create Exam</h3></div>
+          <div class="form-grid">
+            <input id="examTitle" placeholder="Exam title">
+            <select id="examClass"></select>
+            <input id="examDuration" type="number" min="1" value="30" placeholder="Minutes">
+            <label class="check"><input id="randomizeQuestions" type="checkbox" checked> Randomize questions</label>
+          </div>
+          <button class="btn primary" id="createExamBtn">Create Exam</button>
+          <div id="examList" class="list"></div>
+        </div>
+      </div>
+
+      <div id="monitorTab" class="tab-panel">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>Student Monitoring</h3><p class="muted">Demo mode stores activity in this browser.</p></div>
+            <select id="monitorExam"></select>
+          </div>
+          <div id="monitorTable" class="table-wrap"></div>
+        </div>
+      </div>
+
+      <div id="resultsTab" class="tab-panel">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>Examination Results</h3><p class="muted">Export results as CSV.</p></div>
+            <button class="btn secondary" id="downloadCsvBtn">DOWNLOAD RESULTS</button>
+          </div>
+          <div id="resultsTable" class="table-wrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="studentJoinView" class="view">
+      <div class="panel narrow">
+        <div class="panel-head">
+          <div><span class="eyebrow">STUDENT PORTAL</span><h2>Join Examination</h2></div>
+          <button class="icon-btn" data-view="homeView">×</button>
+        </div>
+        <label>Exam Code</label>
+        <input id="joinCode" maxlength="8" placeholder="e.g. GMX482">
+        <label>Student Name</label>
+        <input id="studentName" placeholder="Full name">
+        <label>Student ID</label>
+        <input id="studentId" placeholder="Student ID">
+        <button class="btn primary full" id="joinExamBtn">JOIN EXAM</button>
+        <div id="joinMsg" class="message"></div>
+        <p class="muted small">For this standalone version, the teacher and student use the same browser/device. Multi-device classroom monitoring requires a server/backend.</p>
+      </div>
+    </section>
+
+    <section id="studentExamView" class="view">
+      <div class="exam-head">
+        <div><span class="eyebrow">EXAMINATION</span><h2 id="studentExamTitle">Exam</h2><p id="studentIdentity" class="muted"></p></div>
+        <div class="timer-box"><span>TIME REMAINING</span><strong id="timer">00:00</strong></div>
+      </div>
+      <div class="progress"><div id="progressBar"></div></div>
+      <div id="questionArea" class="panel"></div>
+      <div class="exam-actions">
+        <button class="btn secondary" id="prevBtn">Previous</button>
+        <span id="questionCounter" class="muted"></span>
+        <button class="btn primary" id="nextBtn">Next</button>
+        <button class="btn danger hidden" id="submitExamBtn">SUBMIT EXAM</button>
+      </div>
+    </section>
+
+    <section id="studentResultView" class="view">
+      <div class="panel result-card">
+        <div class="result-icon">✓</div>
+        <span class="eyebrow">EXAM SUBMITTED</span>
+        <h2>Submission Recorded</h2>
+        <p id="studentResultText"></p>
+        <button class="btn primary" data-view="homeView">Return Home</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="script.js"></script>
