@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ExamGuard | Offline Secure Examination &amp; Monitoring System</title>
+  <title>ExamGuard | Secure Examination and Monitoring System</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,193 +12,39 @@
 
   <!-- ================= TOP NAVIGATION ================= -->
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-icon">EG</div>
-      <div>
-        <h1>EXAMGUARD</h1>
-        <span>Offline Secure Examination & Monitoring System</span>
-      </div>
-    </div>
+    <a class="brand" href="#" onclick="showHome(); return false;" aria-label="ExamGuard home">
+      <span class="brand-name">EXAMGUARD</span>
+      <span class="brand-tagline">Secure Examination and Monitoring System</span>
+    </a>
 
-    <div class="topbar-right">
-      <span id="networkStatus" class="network-status">
-        <i></i> LOCAL MODE
-      </span>
-
-      <button class="top-btn" onclick="showHome()">
-        Home
-      </button>
-    </div>
+    <span id="networkStatus" class="status-pill">Ready</span>
   </header>
 
 
   <!-- ================= HOME ================= -->
   <main id="homeScreen" class="screen active">
 
-    <section class="hero">
-      <div class="hero-content">
+    <section class="home-card">
 
-        <div class="hero-label">
-          SECURE • RANDOMIZED • MONITORED
-        </div>
+      <h1>EXAMGUARD</h1>
 
-        <h2>
-          EXAMINATION<br>
-          <span>WITHOUT THE INTERNET.</span>
-        </h2>
+      <p class="home-subtitle">
+        Examination, monitoring, automatic scoring, and downloadable results.
+      </p>
 
-        <p>
-          A local-network examination platform designed for teachers
-          to administer randomized assessments, monitor student status,
-          automatically score examinations, and download results.
-        </p>
+      <div class="role-grid">
 
-        <div class="hero-buttons">
-          <button class="primary-btn" onclick="showTeacherLogin()">
-            👩‍🏫 Teacher Dashboard
-          </button>
+        <button class="role-card" onclick="showTeacherLogin()">
+          <span class="role-icon">👩‍🏫</span>
+          <span class="role-title">Teacher</span>
+          <span class="role-desc">Dashboard &amp; Results</span>
+        </button>
 
-          <button class="secondary-btn" onclick="showStudentJoin()">
-            📱 Student Portal
-          </button>
-        </div>
-
-      </div>
-
-      <div class="hero-visual">
-
-        <div class="shield-card">
-          <div class="shield">
-            🛡️
-          </div>
-
-          <h3>EXAMGUARD</h3>
-
-          <p>
-            Local Examination Server
-          </p>
-
-          <div class="secure-line">
-            <span></span>
-            SECURE LOCAL SESSION
-          </div>
-        </div>
-
-      </div>
-    </section>
-
-
-    <!-- FEATURES -->
-    <section class="feature-section">
-
-      <div class="section-heading">
-        <span>CORE CAPABILITIES</span>
-        <h2>Everything needed for a controlled examination</h2>
-      </div>
-
-      <div class="feature-grid">
-
-        <div class="feature-card">
-          <div class="feature-icon">🔀</div>
-          <h3>Randomized Assessment</h3>
-          <p>
-            Each student can receive a different question order.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">📡</div>
-          <h3>Live Monitoring</h3>
-          <p>
-            Monitor student examination status from the teacher dashboard.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">⏱️</div>
-          <h3>Exam Timer</h3>
-          <p>
-            Automatically track remaining examination time.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">📊</div>
-          <h3>Automatic Scoring</h3>
-          <p>
-            Calculate scores and percentages immediately after submission.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">📥</div>
-          <h3>Download Results</h3>
-          <p>
-            Export examination results to CSV for spreadsheet processing.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🖨️</div>
-          <h3>Print Reports</h3>
-          <p>
-            Generate a printable examination results report.
-          </p>
-        </div>
-
-      </div>
-    </section>
-
-
-    <!-- WORKFLOW -->
-    <section class="workflow-section">
-
-      <div class="section-heading">
-        <span>EXAMGUARD WORKFLOW</span>
-        <h2>From examination creation to results</h2>
-      </div>
-
-      <div class="workflow">
-
-        <div class="workflow-step">
-          <strong>01</strong>
-          <span>Create Class</span>
-        </div>
-
-        <div class="workflow-line"></div>
-
-        <div class="workflow-step">
-          <strong>02</strong>
-          <span>Create Exam</span>
-        </div>
-
-        <div class="workflow-line"></div>
-
-        <div class="workflow-step">
-          <strong>03</strong>
-          <span>Generate Code</span>
-        </div>
-
-        <div class="workflow-line"></div>
-
-        <div class="workflow-step">
-          <strong>04</strong>
-          <span>Students Join</span>
-        </div>
-
-        <div class="workflow-line"></div>
-
-        <div class="workflow-step">
-          <strong>05</strong>
-          <span>Monitor</span>
-        </div>
-
-        <div class="workflow-line"></div>
-
-        <div class="workflow-step">
-          <strong>06</strong>
-          <span>Results</span>
-        </div>
+        <button class="role-card" onclick="showStudentJoin()">
+          <span class="role-icon">📱</span>
+          <span class="role-title">Student</span>
+          <span class="role-desc">Join Examination</span>
+        </button>
 
       </div>
 
