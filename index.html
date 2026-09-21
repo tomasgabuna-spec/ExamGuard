@@ -539,6 +539,9 @@
           </div>
 
 
+          <div id="monitorStartBar" class="start-bar hidden"></div>
+
+
           <div class="monitor-summary">
 
             <div>
@@ -724,6 +727,107 @@
           onclick="showHome()"
         >
           ← Return to Home
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- ================= STUDENT READY ================= -->
+  <section id="studentReadyScreen" class="screen">
+
+    <div class="student-join">
+
+      <div class="student-brand">
+        <div class="brand-icon">EG</div>
+
+        <h2>EXAMGUARD</h2>
+
+        <p>Student Examination Portal</p>
+      </div>
+
+      <div class="join-card ready-card">
+
+        <div id="readyEyebrow" class="eyebrow">
+          WAITING ROOM
+        </div>
+
+        <h2 id="readyExamTitle">Examination</h2>
+
+        <p id="readyStudent"></p>
+
+        <div id="readyBanner" class="ready-banner waiting">
+
+          <span class="pulse-dot"></span>
+
+          <div>
+            <strong id="readyBannerTitle">
+              Waiting for your teacher to start
+            </strong>
+
+            <small id="readyBannerText"></small>
+          </div>
+
+        </div>
+
+        <div class="ready-stats">
+
+          <div>
+            <strong id="readyQuestions">0</strong>
+            <span>Questions</span>
+          </div>
+
+          <div>
+            <strong id="readyDuration">0</strong>
+            <span>Minutes</span>
+          </div>
+
+          <div>
+            <strong id="readyPoints">0</strong>
+            <span>Total Points</span>
+          </div>
+
+        </div>
+
+        <ul class="ready-rules">
+          <li>
+            The timer starts the moment you press
+            <b>Start Exam</b> and cannot be paused.
+          </li>
+          <li>
+            You can move between questions and change your answers
+            until you submit.
+          </li>
+          <li>
+            Your exam is submitted automatically when time runs out.
+          </li>
+          <li>
+            Your teacher can monitor your exam status.
+          </li>
+          <li id="readyRandomNote">
+            Your question order may differ from other students.
+          </li>
+        </ul>
+
+        <button
+          id="readyStartBtn"
+          class="primary-btn start-btn full"
+          onclick="startExam()"
+          disabled
+        >
+          ⏳ WAITING FOR TEACHER…
+        </button>
+
+        <div id="readyMessage" class="form-message"></div>
+
+        <button
+          class="text-btn"
+          onclick="backToJoin()"
+        >
+          ← Back
         </button>
 
       </div>

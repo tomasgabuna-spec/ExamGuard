@@ -17,10 +17,13 @@ const defaultDatabase = {
 
 let db = loadDatabase();
 
+let lastSavedRaw = localStorage.getItem(STORAGE_KEY);
+
 let currentExam = null;
 let currentAttempt = null;
 let currentQuestionIndex = 0;
 let editingQuestionID = null;
+let readyState = null;
 let timerInterval = null;
 
 
@@ -54,9 +57,155 @@ function loadDatabase() {
 
 function saveDatabase() {
 
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(db)
+  const raw = JSON.stringify(db);
+
+  localStorage.setItem(STORAGE_KEY, raw);
+
+  lastSavedRaw = raw;
+
+}
+
+
+/* =========================================================
+   LIVE SYNC (between browser tabs)
+   ---------------------------------------------------------
+   The teacher and the students each have their own tab.
+   Every tab keeps a copy of the database in memory, so we
+   watch localStorage and reload whenever another tab saves.
+   ========================================================= */
+
+function isScreenActive(id) {
+
+  return document
+    .getElementById(id)
+    .classList.contains("active");
+
+}
+
+
+/*
+   Keeps this tab's own attempt (waiting / answering) safe when
+   the database is reloaded from another tab's save.
+
+   Returns:
+     ""        nothing to do
+     "changed" our attempt had to be restored - save again
+     "removed" the teacher removed / terminated this attempt
+*/
+function mergeLocalAttempt() {
+
+  if (!currentAttempt) return "";
+
+  const index =
+    db.attempts.findIndex(
+      a => a.id === currentAttempt.id
+    );
+
+  if (index === -1) {
+
+    db.attempts.push(currentAttempt);
+
+    return "changed";
+
+  }
+
+  const stored = db.attempts[index];
+
+  if (
+    stored.status === "EXITED" &&
+    currentAttempt.status !== "EXITED"
+  ) {
+
+    currentAttempt.status = "EXITED";
+    currentAttempt.exitedAt = stored.exitedAt;
+
+    db.attempts[index] = currentAttempt;
+
+    return "removed";
+
+  }
+
+  const differs =
+    JSON.stringify(stored) !==
+    JSON.stringify(currentAttempt);
+
+  db.attempts[index] = currentAttempt;
+
+  return differs ? "changed" : "";
+
+}
+
+
+/* returns null when nothing changed in storage */
+function syncDatabase() {
+
+  const raw = localStorage.getItem(STORAGE_KEY);
+
+  if (raw === lastSavedRaw) return null;
+
+  db = loadDatabase();
+
+  lastSavedRaw = raw;
+
+  const result = mergeLocalAttempt();
+
+  if (result === "changed" || result === "removed") {
+
+    saveDatabase();
+
+  }
+
+  return result || "synced";
+
+}
+
+
+function handleStorageChange() {
+
+  const result = syncDatabase();
+
+  if (!result) return;
+
+  if (result === "removed") {
+
+    handleRemovedByTeacher();
+
+    return;
+
+  }
+
+  if (isScreenActive("studentReadyScreen")) {
+
+    updateReadyState();
+
+  }
+
+  if (isScreenActive("teacherDashboard")) {
+
+    renderTeacherLive();
+
+  }
+
+}
+
+
+function handleRemovedByTeacher() {
+
+  const wasWaiting =
+    isScreenActive("studentReadyScreen");
+
+  clearInterval(timerInterval);
+
+  currentAttempt = null;
+
+  currentExam = null;
+
+  showScreen("homeScreen");
+
+  showToast(
+    wasWaiting
+      ? "Your teacher removed you from the waiting room."
+      : "Your teacher ended your examination."
   );
 
 }
@@ -251,6 +400,8 @@ function createDemoData() {
 
     status: "OPEN",
 
+    startedAt: null,
+
     code: generateExamCode(),
 
     createdAt:
@@ -294,6 +445,8 @@ function showScreen(id) {
 function showHome() {
 
   clearInterval(timerInterval);
+
+  leaveLobby();
 
   showScreen("homeScreen");
 
@@ -1040,6 +1193,9 @@ function createExam() {
     status:
       "OPEN",
 
+    startedAt:
+      null,
+
     code:
       examCode,
 
@@ -1067,12 +1223,39 @@ function createExam() {
 }
 
 
+function examState(exam) {
+
+  if (exam.status !== "OPEN") {
+
+    return { key: "closed", label: "CLOSED" };
+
+  }
+
+  if (!exam.startedAt) {
+
+    return { key: "waiting", label: "WAITING ROOM" };
+
+  }
+
+  return { key: "started", label: "STARTED" };
+
+}
+
+
+function formatClock(iso) {
+
+  return new Date(iso).toLocaleTimeString(
+    [],
+    { hour: "2-digit", minute: "2-digit" }
+  );
+
+}
+
+
 function renderExams() {
 
   const container =
-    document.getElementById(
-      "examList"
-    );
+    document.getElementById("examList");
 
 
   if (!db.exams.length) {
@@ -1091,16 +1274,20 @@ function renderExams() {
     db.exams.map(exam => {
 
       const cls =
-        db.classes.find(
-          c =>
-            c.id === exam.classID
-        );
-
+        db.classes.find(c => c.id === exam.classID);
 
       const questionCount =
         db.questions.filter(
-          q =>
-            q.classID === exam.classID
+          q => q.classID === exam.classID
+        ).length;
+
+      const state = examState(exam);
+
+      const waitingCount =
+        db.attempts.filter(
+          a =>
+            a.examID === exam.id &&
+            a.status === "WAITING"
         ).length;
 
 
@@ -1139,13 +1326,34 @@ function renderExams() {
                 : "Standard"}
             </span>
 
-            <span class="meta-pill">
-              ${exam.status}
+            <span class="meta-pill state-${state.key}">
+              ${state.label}
             </span>
+
+            ${state.key === "waiting"
+              ? `<span class="meta-pill">
+                  👥 ${waitingCount} waiting
+                </span>`
+              : ""}
+
+            ${exam.startedAt
+              ? `<span class="meta-pill">
+                  Started ${formatClock(exam.startedAt)}
+                </span>`
+              : ""}
 
           </div>
 
           <div class="item-actions">
+
+            ${state.key === "waiting"
+              ? `<button
+                  class="mini-btn start"
+                  onclick="teacherStartExam('${exam.id}')"
+                >
+                  ▶ Start Exam
+                </button>`
+              : ""}
 
             <button
               class="mini-btn green"
@@ -1158,11 +1366,9 @@ function renderExams() {
               class="mini-btn"
               onclick="toggleExam('${exam.id}')"
             >
-              ${
-                exam.status === "OPEN"
-                  ? "Close Exam"
-                  : "Open Exam"
-              }
+              ${exam.status === "OPEN"
+                ? "Close Exam"
+                : "Open Exam"}
             </button>
 
           </div>
@@ -1172,6 +1378,53 @@ function renderExams() {
       `;
 
     }).join("");
+
+}
+
+
+function teacherStartExam(examID) {
+
+  const exam =
+    db.exams.find(e => e.id === examID);
+
+  if (!exam) return;
+
+  if (exam.status !== "OPEN") {
+
+    showToast("Open the exam before starting it.");
+
+    return;
+
+  }
+
+  if (exam.startedAt) return;
+
+  const waiting =
+    db.attempts.filter(
+      a =>
+        a.examID === exam.id &&
+        a.status === "WAITING"
+    ).length;
+
+  if (
+    !confirm(
+      `Start "${exam.title}" now?\n\n` +
+      `${waiting} student(s) in the waiting room ` +
+      `will be able to begin immediately.`
+    )
+  ) {
+
+    return;
+
+  }
+
+  exam.startedAt = new Date().toISOString();
+
+  saveDatabase();
+
+  renderTeacherLive();
+
+  showToast("Exam started. Students can now begin.");
 
 }
 
@@ -1227,16 +1480,11 @@ function toggleExam(examID) {
 function renderActiveExam() {
 
   const container =
-    document.getElementById(
-      "activeExamCard"
-    );
+    document.getElementById("activeExamCard");
 
 
   const activeExam =
-    db.exams.find(
-      exam =>
-        exam.status === "OPEN"
-    );
+    db.exams.find(exam => exam.status === "OPEN");
 
 
   if (!activeExam) {
@@ -1252,17 +1500,64 @@ function renderActiveExam() {
 
 
   const cls =
-    db.classes.find(
-      c =>
-        c.id === activeExam.classID
-    );
+    db.classes.find(c => c.id === activeExam.classID);
 
-
-  const participants =
+  const attempts =
     db.attempts.filter(
-      attempt =>
-        attempt.examID === activeExam.id
+      attempt => attempt.examID === activeExam.id
     );
+
+  const waitingList =
+    attempts.filter(a => a.status === "WAITING");
+
+  const answering =
+    attempts.filter(a => a.status === "ANSWERING").length;
+
+  const submitted =
+    attempts.filter(a => a.status === "SUBMITTED").length;
+
+
+  const roomHTML =
+    !activeExam.startedAt
+
+      ? `
+        <div class="room-box">
+
+          <div class="room-head">
+            <strong>👥 Waiting room</strong>
+            <span>${waitingList.length} waiting</span>
+          </div>
+
+          <div class="room-list">
+            ${waitingList.length
+              ? waitingList.map(a =>
+                  `<span class="room-chip">
+                    ${escapeHTML(a.studentName)}
+                  </span>`
+                ).join("")
+              : `<em>No students yet. Share the exam code above.</em>`}
+          </div>
+
+          <button
+            class="primary-btn full"
+            onclick="teacherStartExam('${activeExam.id}')"
+          >
+            ▶ START EXAM
+          </button>
+
+          <small>
+            Students can enter the waiting room now, but
+            cannot begin until you press Start.
+          </small>
+
+        </div>`
+
+      : `
+        <div class="room-box started">
+          ✅ Started at ${formatClock(activeExam.startedAt)}
+          • ${answering} answering
+          • ${submitted} submitted
+        </div>`;
 
 
   container.innerHTML = `
@@ -1293,14 +1588,45 @@ function renderActiveExam() {
 
         <span class="meta-pill">
           Students:
-          ${participants.length}
+          ${attempts.length}
         </span>
 
       </div>
 
+      ${roomHTML}
+
     </div>
 
   `;
+
+}
+
+
+/* ---------- light refresh used by live sync ---------- */
+
+function renderTeacherLive() {
+
+  document.getElementById("classCount").textContent =
+    db.classes.length;
+
+  document.getElementById("questionCount").textContent =
+    db.questions.length;
+
+  document.getElementById("examCount").textContent =
+    db.exams.length;
+
+  document.getElementById("submissionCount").textContent =
+    db.results.length;
+
+  renderActiveExam();
+
+  renderExams();
+
+  populateMonitorExamList();
+
+  renderMonitor();
+
+  renderResults();
 
 }
 
@@ -1312,9 +1638,9 @@ function renderActiveExam() {
 function populateMonitorExamList() {
 
   const select =
-    document.getElementById(
-      "monitorExam"
-    );
+    document.getElementById("monitorExam");
+
+  const previous = select.value;
 
 
   if (!db.exams.length) {
@@ -1340,107 +1666,138 @@ function populateMonitorExamList() {
 
     ).join("");
 
+
+  if (
+    previous &&
+    db.exams.some(e => e.id === previous)
+  ) {
+
+    select.value = previous;
+
+  }
+
+}
+
+
+function renderMonitorStartBar(exam) {
+
+  const bar =
+    document.getElementById("monitorStartBar");
+
+  if (!exam) {
+
+    bar.className = "start-bar hidden";
+
+    bar.innerHTML = "";
+
+    return;
+
+  }
+
+  const state = examState(exam);
+
+  if (state.key === "waiting") {
+
+    bar.className = "start-bar waiting";
+
+    bar.innerHTML = `
+      <div>
+        <strong>Waiting room is open</strong>
+        <span>
+          Students can join, but cannot begin until
+          you start the exam.
+        </span>
+      </div>
+
+      <button
+        class="primary-btn"
+        onclick="teacherStartExam('${exam.id}')"
+      >
+        ▶ START EXAM
+      </button>
+    `;
+
+  } else if (state.key === "started") {
+
+    bar.className = "start-bar started";
+
+    bar.innerHTML = `
+      <div>
+        <strong>Exam started</strong>
+        <span>Started at ${formatClock(exam.startedAt)}</span>
+      </div>
+    `;
+
+  } else {
+
+    bar.className = "start-bar closed";
+
+    bar.innerHTML = `
+      <div>
+        <strong>Exam closed</strong>
+        <span>
+          Open it again from Exams &amp; Quizzes to
+          let students in.
+        </span>
+      </div>
+    `;
+
+  }
+
 }
 
 
 function renderMonitor() {
 
   const select =
-    document.getElementById(
-      "monitorExam"
-    );
-
+    document.getElementById("monitorExam");
 
   const examID =
-    select.value ||
-    db.exams[0]?.id;
-
+    select.value || db.exams[0]?.id;
 
   if (!examID) {
+
+    renderMonitorStartBar(null);
 
     return;
 
   }
 
-
   select.value = examID;
+
+  renderMonitorStartBar(
+    db.exams.find(e => e.id === examID)
+  );
 
 
   const attempts =
     db.attempts.filter(
-      attempt =>
-        attempt.examID === examID
+      attempt => attempt.examID === examID
     );
 
-
-  let waiting = 0;
-  let answering = 0;
-  let interrupted = 0;
-  let submitted = 0;
-  let exited = 0;
+  const count =
+    status =>
+      attempts.filter(a => a.status === status).length;
 
 
-  attempts.forEach(
-    attempt => {
+  document.getElementById("waitingCount").textContent =
+    count("WAITING");
 
-      if (
-        attempt.status ===
-        "WAITING"
-      ) waiting++;
+  document.getElementById("answeringCount").textContent =
+    count("ANSWERING");
 
-      if (
-        attempt.status ===
-        "ANSWERING"
-      ) answering++;
+  document.getElementById("interruptedCount").textContent =
+    count("INTERRUPTED");
 
-      if (
-        attempt.status ===
-        "INTERRUPTED"
-      ) interrupted++;
+  document.getElementById("submittedCount").textContent =
+    count("SUBMITTED");
 
-      if (
-        attempt.status ===
-        "SUBMITTED"
-      ) submitted++;
-
-      if (
-        attempt.status ===
-        "EXITED"
-      ) exited++;
-
-    }
-  );
-
-
-  document.getElementById(
-    "waitingCount"
-  ).textContent = waiting;
-
-
-  document.getElementById(
-    "answeringCount"
-  ).textContent = answering;
-
-
-  document.getElementById(
-    "interruptedCount"
-  ).textContent = interrupted;
-
-
-  document.getElementById(
-    "submittedCount"
-  ).textContent = submitted;
-
-
-  document.getElementById(
-    "exitedCount"
-  ).textContent = exited;
+  document.getElementById("exitedCount").textContent =
+    count("EXITED");
 
 
   const body =
-    document.getElementById(
-      "monitorBody"
-    );
+    document.getElementById("monitorBody");
 
 
   if (!attempts.length) {
@@ -1469,20 +1826,42 @@ function renderMonitor() {
     attempts.map(
       attempt => {
 
+        const total = attempt.questionIDs.length;
+
         const answered =
           attempt.answers.filter(
-            answer =>
-              answer !== null
+            answer => answer !== null
           ).length;
 
-
         const progress =
-          Math.round(
-            answered /
-            attempt.questionIDs.length *
-            100
-          );
+          total
+            ? Math.round(answered / total * 100)
+            : 0;
 
+        const notStarted =
+          attempt.status === "WAITING" && !total;
+
+        let action = "—";
+
+        if (attempt.status === "ANSWERING") {
+
+          action = `<button
+            class="mini-btn red"
+            onclick="terminateAttempt('${attempt.id}')"
+          >
+            Terminate
+          </button>`;
+
+        } else if (attempt.status === "WAITING") {
+
+          action = `<button
+            class="mini-btn red"
+            onclick="terminateAttempt('${attempt.id}')"
+          >
+            Remove
+          </button>`;
+
+        }
 
         return `
 
@@ -1490,63 +1869,34 @@ function renderMonitor() {
 
             <td>
               <strong>
-                ${escapeHTML(
-                  attempt.studentName
-                )}
+                ${escapeHTML(attempt.studentName)}
               </strong>
             </td>
 
             <td>
-              ${escapeHTML(
-                attempt.studentID
-              )}
+              ${escapeHTML(attempt.studentID)}
             </td>
 
             <td>
-
-              <span
-                class="status ${attempt.status}"
-              >
+              <span class="status ${attempt.status}">
                 ${attempt.status}
               </span>
-
             </td>
 
             <td>
-              ${answered}/
-              ${attempt.questionIDs.length}
-              (${progress}%)
+              ${notStarted
+                ? "—"
+                : `${answered}/${total} (${progress}%)`}
             </td>
 
             <td>
-              ${
-                attempt.status ===
-                "SUBMITTED"
-                  ? attempt.score
-                  : "—"
-              }
+              ${attempt.status === "SUBMITTED"
+                ? attempt.score
+                : "—"}
             </td>
 
             <td>
-
-              ${
-                attempt.status ===
-                "ANSWERING"
-
-                ?
-
-                `<button
-                  class="mini-btn red"
-                  onclick="terminateAttempt('${attempt.id}')"
-                >
-                  Terminate
-                </button>`
-
-                :
-
-                "—"
-              }
-
+              ${action}
             </td>
 
           </tr>
@@ -1559,23 +1909,20 @@ function renderMonitor() {
 }
 
 
-function terminateAttempt(
-  attemptID
-) {
+function terminateAttempt(attemptID) {
 
   const attempt =
-    db.attempts.find(
-      a =>
-        a.id === attemptID
-    );
-
+    db.attempts.find(a => a.id === attemptID);
 
   if (!attempt) return;
 
+  const waiting = attempt.status === "WAITING";
 
   if (
     !confirm(
-      `Terminate ${attempt.studentName}'s examination?`
+      waiting
+        ? `Remove ${attempt.studentName} from the waiting room?`
+        : `Terminate ${attempt.studentName}'s examination?`
     )
   ) {
 
@@ -1583,21 +1930,20 @@ function terminateAttempt(
 
   }
 
+  attempt.status = "EXITED";
 
-  attempt.status =
-    "EXITED";
-
-
-  attempt.exitedAt =
-    new Date().toISOString();
-
+  attempt.exitedAt = new Date().toISOString();
 
   saveDatabase();
 
   renderMonitor();
 
+  renderActiveExam();
+
   showToast(
-    "Student examination terminated."
+    waiting
+      ? "Student removed from the waiting room."
+      : "Student examination terminated."
   );
 
 }
@@ -1608,6 +1954,8 @@ function terminateAttempt(
    ========================================================= */
 
 function joinExam() {
+
+  syncDatabase();
 
   const code =
     document
@@ -1704,83 +2052,356 @@ function joinExam() {
   }
 
 
+  message.textContent = "";
+
+  let attempt =
+    db.attempts.find(
+      a =>
+        a.examID === exam.id &&
+        a.studentID === studentID &&
+        a.status === "WAITING"
+    );
+
+  if (attempt) {
+
+    attempt.studentName = studentName;
+
+  } else {
+
+    attempt = {
+
+      id: generateID("ATTEMPT"),
+
+      examID: exam.id,
+
+      studentName,
+
+      studentID,
+
+      status: "WAITING",
+
+      questionIDs: [],
+
+      answers: [],
+
+      joinedAt: new Date().toISOString(),
+
+      startedAt: null,
+
+      score: 0
+
+    };
+
+    db.attempts.push(attempt);
+
+  }
+
+  currentExam = exam;
+
+  currentAttempt = attempt;
+
+  saveDatabase();
+
+  renderReadyScreen();
+
+  showScreen("studentReadyScreen");
+
+}
+
+
+function renderReadyScreen() {
+
+  readyState = null;
+
+  document.getElementById("readyExamTitle").textContent =
+    currentExam.title;
+
+  document.getElementById("readyStudent").textContent =
+    `${currentAttempt.studentName} • ${currentAttempt.studentID}`;
+
+  document.getElementById("readyMessage").textContent = "";
+
+  updateReadyState();
+
+}
+
+
+/* Keeps the waiting-room screen in step with the teacher. */
+function updateReadyState() {
+
+  if (!currentAttempt) return;
+
+  const exam =
+    db.exams.find(e => e.id === currentAttempt.examID);
+
+  const banner = document.getElementById("readyBanner");
+  const title = document.getElementById("readyBannerTitle");
+  const text = document.getElementById("readyBannerText");
+  const button = document.getElementById("readyStartBtn");
+
+  let state = "waiting";
+
+  if (!exam || exam.status !== "OPEN") {
+
+    state = "closed";
+
+  } else if (exam.startedAt) {
+
+    state = "started";
+
+  }
+
+
+  if (exam) {
+
+    const questions =
+      db.questions.filter(q => q.classID === exam.classID);
+
+    document.getElementById("readyQuestions").textContent =
+      questions.length;
+
+    document.getElementById("readyDuration").textContent =
+      exam.duration;
+
+    document.getElementById("readyPoints").textContent =
+      questions.reduce(
+        (sum, q) => sum + Number(q.points),
+        0
+      );
+
+    document.getElementById("readyRandomNote")
+      .classList.toggle("hidden", !exam.randomize);
+
+  }
+
+
+  banner.className = "ready-banner " + state;
+
+  document.getElementById("readyEyebrow").textContent =
+    state === "started"
+      ? "READY TO BEGIN"
+      : state === "closed"
+        ? "EXAM CLOSED"
+        : "WAITING ROOM";
+
+  if (state === "waiting") {
+
+    const inRoom =
+      db.attempts.filter(
+        a =>
+          a.examID === exam.id &&
+          a.status === "WAITING"
+      ).length;
+
+    title.textContent =
+      "Waiting for your teacher to start";
+
+    text.textContent =
+      `${inRoom} student${inRoom === 1 ? "" : "s"} in the ` +
+      "waiting room. This page unlocks automatically " +
+      "when the exam begins.";
+
+    button.disabled = true;
+
+    button.textContent = "⏳ WAITING FOR TEACHER…";
+
+  } else if (state === "started") {
+
+    title.textContent =
+      "Your teacher has started the exam";
+
+    text.textContent =
+      "Press Start Exam when you are ready. " +
+      "Your timer begins when you press it.";
+
+    button.disabled = false;
+
+    button.textContent = "▶ START EXAM";
+
+  } else {
+
+    title.textContent =
+      "This examination is closed";
+
+    text.textContent =
+      "Your teacher has closed this exam.";
+
+    button.disabled = true;
+
+    button.textContent = "EXAM CLOSED";
+
+  }
+
+
+  if (state !== readyState) {
+
+    if (state === "started" && readyState === "waiting") {
+
+      showToast("Your teacher has started the exam.");
+
+    }
+
+    document.getElementById("readyMessage").textContent = "";
+
+    readyState = state;
+
+  }
+
+}
+
+
+/* Leaves the waiting room and removes the student from it. */
+function leaveLobby() {
+
+  if (
+    !currentAttempt ||
+    currentAttempt.status !== "WAITING"
+  ) {
+
+    return;
+
+  }
+
+  const id = currentAttempt.id;
+
+  currentAttempt = null;
+
+  currentExam = null;
+
+  db = loadDatabase();
+
+  db.attempts = db.attempts.filter(a => a.id !== id);
+
+  saveDatabase();
+
+}
+
+
+function backToJoin() {
+
+  leaveLobby();
+
+  showStudentJoin();
+
+}
+
+
+function startExam() {
+
+  if (
+    !currentAttempt ||
+    currentAttempt.status !== "WAITING"
+  ) {
+
+    showStudentJoin();
+
+    return;
+
+  }
+
+  if (syncDatabase() === "removed") {
+
+    handleRemovedByTeacher();
+
+    return;
+
+  }
+
+  const message =
+    document.getElementById("readyMessage");
+
+  const exam =
+    db.exams.find(e => e.id === currentAttempt.examID);
+
+  if (!exam) {
+
+    message.textContent =
+      "This examination no longer exists.";
+
+    return;
+
+  }
+
+  if (exam.status !== "OPEN") {
+
+    message.textContent =
+      "This examination has been closed by your teacher.";
+
+    updateReadyState();
+
+    return;
+
+  }
+
+  if (!exam.startedAt) {
+
+    message.textContent =
+      "Your teacher has not started the exam yet. Please wait.";
+
+    updateReadyState();
+
+    return;
+
+  }
+
+  const questions =
+    db.questions.filter(q => q.classID === exam.classID);
+
+  if (!questions.length) {
+
+    message.textContent =
+      "This examination has no questions.";
+
+    return;
+
+  }
+
   const orderedQuestions =
     exam.randomize
       ? shuffle(questions)
       : questions;
 
-
   currentExam = exam;
 
+  currentAttempt.status = "ANSWERING";
 
-  currentAttempt = {
+  currentAttempt.questionIDs =
+    orderedQuestions.map(q => q.id);
 
-    id:
-      generateID("ATTEMPT"),
+  currentAttempt.answers =
+    Array(orderedQuestions.length).fill(null);
 
-    examID:
-      exam.id,
+  currentAttempt.startedAt =
+    new Date().toISOString();
 
-    studentName,
+  currentAttempt.score = 0;
 
-    studentID,
+  const index =
+    db.attempts.findIndex(a => a.id === currentAttempt.id);
 
-    status:
-      "ANSWERING",
+  if (index === -1) {
 
-    questionIDs:
-      orderedQuestions.map(
-        q =>
-          q.id
-      ),
+    db.attempts.push(currentAttempt);
 
-    answers:
-      Array(
-        orderedQuestions.length
-      ).fill(null),
+  } else {
 
-    startedAt:
-      new Date().toISOString(),
+    db.attempts[index] = currentAttempt;
 
-    score:
-      0
-
-  };
-
-
-  db.attempts.push(
-    currentAttempt
-  );
-
+  }
 
   saveDatabase();
 
+  currentQuestionIndex = 0;
 
-  currentQuestionIndex =
-    0;
-
-
-  document.getElementById(
-    "studentExamTitle"
-  ).textContent =
+  document.getElementById("studentExamTitle").textContent =
     exam.title;
 
+  document.getElementById("studentExamStudent").textContent =
+    `${currentAttempt.studentName} • ${currentAttempt.studentID}`;
 
-  document.getElementById(
-    "studentExamStudent"
-  ).textContent =
-    `${studentName} • ${studentID}`;
+  showScreen("studentExamScreen");
 
-
-  showScreen(
-    "studentExamScreen"
-  );
-
-
-  startExamTimer(
-    exam.duration * 60
-  );
-
+  startExamTimer(exam.duration * 60);
 
   renderStudentQuestion();
 
@@ -2864,6 +3485,12 @@ document.addEventListener(
    ========================================================= */
 
 renderTeacherDashboard();
+
+window.addEventListener("storage", handleStorageChange);
+
+setInterval(handleStorageChange, 1000);
+
+window.addEventListener("pagehide", leaveLobby);
 
 console.log(
   "EXAMGUARD initialized successfully."
