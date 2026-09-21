@@ -1,215 +1,177 @@
 /* =========================================================
    EXAMGUARD
-   Offline Secure Examination and Monitoring System
-   CodePen Frontend Prototype
+   Secure Examination and Monitoring System
+   Online version - all devices share one Supabase database
    ========================================================= */
 
-const STORAGE_KEY = "EXAMGUARD_DATABASE_V2";
 
-const defaultDatabase = {
-  teacherPin: "1234",
-  classes: [],
-  questions: [],
-  exams: [],
-  attempts: [],
-  results: []
+/* =========================================================
+   SETTINGS
+   Fill in the first two lines (see SETUP.md).
+   Supabase dashboard -> Project Settings -> API
+   Use the "anon public" key. NEVER use the service_role key.
+   ========================================================= */
+
+const CONFIG = {
+
+  SUPABASE_URL: "https://YOUR-PROJECT-ID.supabase.co",
+
+  SUPABASE_ANON_KEY: "YOUR-ANON-PUBLIC-KEY",
+
+  /* how often (milliseconds) devices check in with the server */
+  STUDENT_POLL_MS: 3000,
+  TEACHER_POLL_MS: 3000,
+
+  /* If the exam timer stops ticking for longer than this, the phone
+     was asleep or frozen, so the exam is treated as "left the screen". */
+  RESUME_GAP_MS: 8000,
+
+  /* Also end the exam when the window loses focus (split-screen,
+     floating windows...). Off by default because it can be triggered
+     by accident. Minimizing / switching apps / locking the phone are
+     always detected. */
+  END_ON_WINDOW_BLUR: false
+
 };
 
-let db = loadDatabase();
 
-let lastSavedRaw = localStorage.getItem(STORAGE_KEY);
-
-let currentExam = null;
-let currentAttempt = null;
-let currentQuestionIndex = 0;
-let editingQuestionID = null;
-let readyState = null;
-let timerInterval = null;
-
-
-/* =========================================================
-   DATABASE
-   ========================================================= */
-
-function loadDatabase() {
-
-  try {
-
-    const saved = localStorage.getItem(STORAGE_KEY);
-
-    if (!saved) {
-      return structuredClone(defaultDatabase);
-    }
-
-    return {
-      ...structuredClone(defaultDatabase),
-      ...JSON.parse(saved)
-    };
-
-  } catch (error) {
-
-    return structuredClone(defaultDatabase);
-
-  }
-
-}
-
-
-function saveDatabase() {
-
-  const raw = JSON.stringify(db);
-
-  localStorage.setItem(STORAGE_KEY, raw);
-
-  lastSavedRaw = raw;
-
-}
-
-
-/* =========================================================
-   LIVE SYNC (between browser tabs)
-   ---------------------------------------------------------
-   The teacher and the students each have their own tab.
-   Every tab keeps a copy of the database in memory, so we
-   watch localStorage and reload whenever another tab saves.
-   ========================================================= */
-
-function isScreenActive(id) {
-
-  return document
-    .getElementById(id)
-    .classList.contains("active");
-
-}
-
-
-/*
-   Keeps this tab's own attempt (waiting / answering) safe when
-   the database is reloaded from another tab's save.
-
-   Returns:
-     ""        nothing to do
-     "changed" our attempt had to be restored - save again
-     "removed" the teacher removed / terminated this attempt
-*/
-function mergeLocalAttempt() {
-
-  if (!currentAttempt) return "";
-
-  const index =
-    db.attempts.findIndex(
-      a => a.id === currentAttempt.id
-    );
-
-  if (index === -1) {
-
-    db.attempts.push(currentAttempt);
-
-    return "changed";
-
-  }
-
-  const stored = db.attempts[index];
-
-  if (
-    stored.status === "EXITED" &&
-    currentAttempt.status !== "EXITED"
-  ) {
-
-    currentAttempt.status = "EXITED";
-    currentAttempt.exitedAt = stored.exitedAt;
-
-    db.attempts[index] = currentAttempt;
-
-    return "removed";
-
-  }
-
-  const differs =
-    JSON.stringify(stored) !==
-    JSON.stringify(currentAttempt);
-
-  db.attempts[index] = currentAttempt;
-
-  return differs ? "changed" : "";
-
-}
-
-
-/* returns null when nothing changed in storage */
-function syncDatabase() {
-
-  const raw = localStorage.getItem(STORAGE_KEY);
-
-  if (raw === lastSavedRaw) return null;
-
-  db = loadDatabase();
-
-  lastSavedRaw = raw;
-
-  const result = mergeLocalAttempt();
-
-  if (result === "changed" || result === "removed") {
-
-    saveDatabase();
-
-  }
-
-  return result || "synced";
-
-}
-
-
-function handleStorageChange() {
-
-  const result = syncDatabase();
-
-  if (!result) return;
-
-  if (result === "removed") {
-
-    handleRemovedByTeacher();
-
-    return;
-
-  }
-
-  if (isScreenActive("studentReadyScreen")) {
-
-    updateReadyState();
-
-  }
-
-  if (isScreenActive("teacherDashboard")) {
-
-    renderTeacherLive();
-
-  }
-
-}
-
-
-function handleRemovedByTeacher() {
-
-  const wasWaiting =
-    isScreenActive("studentReadyScreen");
-
-  clearInterval(timerInterval);
-
-  currentAttempt = null;
-
-  currentExam = null;
-
-  showScreen("homeScreen");
-
-  showToast(
-    wasWaiting
-      ? "Your teacher removed you from the waiting room."
-      : "Your teacher ended your examination."
+function isConfigured() {
+
+  return (
+    typeof CONFIG.SUPABASE_URL === "string" &&
+    CONFIG.SUPABASE_URL.startsWith("https://") &&
+    !CONFIG.SUPABASE_URL.includes("YOUR-PROJECT") &&
+    typeof CONFIG.SUPABASE_ANON_KEY === "string" &&
+    CONFIG.SUPABASE_ANON_KEY.length > 20 &&
+    !CONFIG.SUPABASE_ANON_KEY.includes("YOUR-ANON")
   );
 
 }
 
+
+const sb =
+  isConfigured() && window.supabase
+    ? window.supabase.createClient(
+        CONFIG.SUPABASE_URL,
+        CONFIG.SUPABASE_ANON_KEY
+      )
+    : null;
+
+
+const SERVER_UNAVAILABLE =
+  "The exam server is not available. " +
+  "Check the Supabase setup or your internet connection.";
+
+
+/* =========================================================
+   STATE
+   ========================================================= */
+
+/* Teacher's in-memory copy of the shared data.
+   (Students never receive this - they only get their own exam.) */
+let db = emptyDatabase();
+
+function emptyDatabase() {
+
+  return {
+    classes: [],
+    questions: [],
+    exams: [],
+    attempts: [],
+    results: []
+  };
+
+}
+
+/* What the server last told us, so we only send real changes. */
+let snapshot = emptySnapshot();
+
+function emptySnapshot() {
+
+  return {
+    classes: new Map(),
+    questions: new Map(),
+    exams: new Map()
+  };
+
+}
+
+let editingQuestionID = null;
+
+/* teacher */
+let teacherSignedIn = false;
+let teacherPollTimer = null;
+let lastFullPull = 0;
+let lastSweep = 0;
+let pulling = false;
+let writeEpoch = 0;
+let pendingWrites = 0;
+let writeChain = Promise.resolve();
+let sigBank = "";
+let sigLive = "";
+
+/* student */
+let currentExam = null;
+let currentAttempt = null;
+let studentQuestions = [];
+let currentQuestionIndex = 0;
+let readyState = null;
+let timerInterval = null;
+let studentPollTimer = null;
+let examEndsAt = 0;
+let lastTick = 0;
+let pollBusy = false;
+let pollFailures = 0;
+let startingExam = false;
+let submitting = false;
+let examEnding = false;
+let guardPaused = false;
+let pendingLeaveID = null;
+let flushPromise = null;
+const pendingAnswers = new Set();
+
+
+function el(id) {
+
+  return document.getElementById(id);
+
+}
+
+
+function isScreenActive(id) {
+
+  return el(id).classList.contains("active");
+
+}
+
+
+function setNetworkStatus(state) {
+
+  const pill = el("networkStatus");
+
+  if (!pill) return;
+
+  pill.className =
+    "status-pill" +
+    (state === "offline"
+      ? " offline"
+      : state === "off"
+        ? " off"
+        : "");
+
+  pill.textContent =
+    state === "online"
+      ? "Online"
+      : state === "offline"
+        ? "Offline"
+        : "Not set up";
+
+}
+
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
 
 function generateID(prefix) {
 
@@ -226,21 +188,19 @@ function generateID(prefix) {
 }
 
 
+/* 6 characters, no look-alikes (no 0/O, 1/I/L) */
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
 function generateExamCode() {
 
-  return Math.random()
-    .toString(36)
-    .substring(2, 8)
-    .toUpperCase();
+  const bytes = new Uint32Array(6);
 
-}
+  crypto.getRandomValues(bytes);
 
-
-function shuffle(array) {
-
-  return [...array].sort(
-    () => Math.random() - 0.5
-  );
+  return Array.from(
+    bytes,
+    b => CODE_ALPHABET[b % CODE_ALPHABET.length]
+  ).join("");
 
 }
 
@@ -258,164 +218,608 @@ function escapeHTML(value) {
 
 
 /* =========================================================
-   INITIAL DEMO DATA
+   DATABASE (TEACHER SIDE)
+   ---------------------------------------------------------
+   The teacher screens keep working on the in-memory "db".
+   saveDatabase() sends only what changed to Supabase, and a
+   background poll pulls in what students / other tabs did.
    ========================================================= */
 
-function createDemoData() {
+const TABLE_MAP = {
 
-  if (
-    db.classes.length > 0 ||
-    db.questions.length > 0 ||
-    db.exams.length > 0
-  ) {
-    return;
+  classes: {
+
+    table: "classes",
+
+    toRow: c => ({
+      id: c.id,
+      name: c.name,
+      created_at: c.createdAt || new Date().toISOString()
+    }),
+
+    fromRow: r => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.created_at
+    })
+
+  },
+
+  questions: {
+
+    table: "questions",
+
+    toRow: q => ({
+      id: q.id,
+      class_id: q.classID,
+      text: q.text,
+      choices: q.choices,
+      correct: q.correct,
+      points: q.points,
+      created_at: q.createdAt || new Date().toISOString()
+    }),
+
+    fromRow: r => ({
+      id: r.id,
+      classID: r.class_id,
+      text: r.text,
+      choices: r.choices,
+      correct: r.correct,
+      points: r.points,
+      createdAt: r.created_at
+    })
+
+  },
+
+  exams: {
+
+    table: "exams",
+
+    toRow: e => ({
+      id: e.id,
+      title: e.title,
+      class_id: e.classID,
+      duration: e.duration,
+      randomize: e.randomize,
+      status: e.status,
+      started_at: e.startedAt || null,
+      code: e.code,
+      created_at: e.createdAt || new Date().toISOString()
+    }),
+
+    fromRow: r => ({
+      id: r.id,
+      title: r.title,
+      classID: r.class_id,
+      duration: r.duration,
+      randomize: r.randomize,
+      status: r.status,
+      startedAt: r.started_at,
+      code: r.code,
+      createdAt: r.created_at
+    })
+
   }
 
-
-  const classID = generateID("CLASS");
-
-
-  db.classes.push({
-
-    id: classID,
-
-    name:
-      "Grade 11 Mathematics",
-
-    createdAt:
-      new Date().toISOString()
-
-  });
+};
 
 
-  db.questions.push(
-
-    {
-      id: generateID("Q"),
-
-      classID,
-
-      text:
-        "What is the next term in the sequence 2, 4, 6, 8, ...?",
-
-      choices: {
-        A: "9",
-        B: "10",
-        C: "11",
-        D: "12"
-      },
-
-      correct: "B",
-
-      points: 1
-
-    },
+/* attempts are read-only for the teacher screens; changes go
+   through the teacher_end_attempt function instead */
+const ATTEMPT_COLUMNS =
+  "id,exam_id,student_name,status,reason,question_ids," +
+  "answers,score,total,joined_at,started_at,submitted_at," +
+  "exited_at,last_seen";
 
 
-    {
-      id: generateID("Q"),
+function attemptFromRow(r) {
 
-      classID,
-
-      text:
-        "If f(x) = 2x + 3, what is f(4)?",
-
-      choices: {
-        A: "7",
-        B: "8",
-        C: "11",
-        D: "12"
-      },
-
-      correct: "C",
-
-      points: 1
-
-    },
-
-
-    {
-      id: generateID("Q"),
-
-      classID,
-
-      text:
-        "Which is an example of a continuous variable?",
-
-      choices: {
-        A: "Number of siblings",
-        B: "Number of students",
-        C: "Travel time",
-        D: "Number of books"
-
-      },
-
-      correct: "C",
-
-      points: 1
-
-    },
-
-
-    {
-      id: generateID("Q"),
-
-      classID,
-
-      text:
-        "Which of the following represents a linear function?",
-
-      choices: {
-        A: "y = x²",
-        B: "y = 2x + 5",
-        C: "y = 1/x",
-        D: "y = √x"
-
-      },
-
-      correct: "B",
-
-      points: 1
-
-    }
-
-  );
-
-
-  const examID = generateID("EXAM");
-
-
-  db.exams.push({
-
-    id: examID,
-
-    title:
-      "Grade 11 Mathematics Demo Examination",
-
-    classID,
-
-    duration: 15,
-
-    randomize: true,
-
-    status: "OPEN",
-
-    startedAt: null,
-
-    code: generateExamCode(),
-
-    createdAt:
-      new Date().toISOString()
-
-  });
-
-
-  saveDatabase();
+  return {
+    id: r.id,
+    examID: r.exam_id,
+    studentName: r.student_name,
+    status: r.status,
+    reason: r.reason,
+    questionIDs: r.question_ids || [],
+    answers: r.answers || [],
+    score: r.score,
+    total: r.total,
+    joinedAt: r.joined_at,
+    startedAt: r.started_at,
+    submittedAt: r.submitted_at,
+    exitedAt: r.exited_at,
+    lastSeen: r.last_seen
+  };
 
 }
 
 
-createDemoData();
+async function fetchTable(name) {
+
+  const spec = TABLE_MAP[name];
+
+  const { data, error } =
+    await sb
+      .from(spec.table)
+      .select("*")
+      .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  return data.map(spec.fromRow);
+
+}
+
+
+async function fetchAttempts() {
+
+  /* newest 1000 attempts (the server returns at most 1000 rows) */
+  const { data, error } =
+    await sb
+      .from("attempts")
+      .select(ATTEMPT_COLUMNS)
+      .order("joined_at", { ascending: false })
+      .limit(1000);
+
+  if (error) throw error;
+
+  return data.reverse().map(attemptFromRow);
+
+}
+
+
+function applyTable(name, rows) {
+
+  db[name] = rows;
+
+  snapshot[name] =
+    new Map(
+      rows.map(
+        o => [o.id, TABLE_MAP[name].toRow(o)]
+      )
+    );
+
+}
+
+
+/* Called by every teacher action after it changes "db". */
+function saveDatabase() {
+
+  if (!sb) return Promise.resolve();
+
+  writeEpoch++;
+
+  pendingWrites++;
+
+  writeChain =
+    writeChain
+      .then(pushChanges)
+      .catch(error => {
+
+        console.error("EXAMGUARD save failed:", error);
+
+        setNetworkStatus("offline");
+
+        showToast(
+          "Could not save to the server. " +
+          "Check your connection."
+        );
+
+      })
+      .finally(() => {
+
+        pendingWrites--;
+
+      });
+
+  return writeChain;
+
+}
+
+
+async function pushChanges() {
+
+  for (const name of ["classes", "questions", "exams"]) {
+
+    const spec = TABLE_MAP[name];
+
+    const snap = snapshot[name];
+
+    const current =
+      new Map(
+        db[name].map(
+          o => [o.id, spec.toRow(o)]
+        )
+      );
+
+    const inserts = [];
+    const updates = [];
+    const deletes = [];
+
+    current.forEach((row, id) => {
+
+      const old = snap.get(id);
+
+      if (!old) {
+
+        inserts.push(row);
+
+        return;
+
+      }
+
+      const changed = {};
+
+      Object.keys(row).forEach(key => {
+
+        if (
+          JSON.stringify(row[key]) !==
+          JSON.stringify(old[key])
+        ) {
+
+          changed[key] = row[key];
+
+        }
+
+      });
+
+      if (Object.keys(changed).length) {
+
+        updates.push([id, changed]);
+
+      }
+
+    });
+
+    snap.forEach((row, id) => {
+
+      if (!current.has(id)) deletes.push(id);
+
+    });
+
+
+    if (inserts.length) {
+
+      const { error } =
+        await sb.from(spec.table).insert(inserts);
+
+      if (error) throw error;
+
+      inserts.forEach(row => snap.set(row.id, row));
+
+    }
+
+    for (const [id, changed] of updates) {
+
+      const { error } =
+        await sb
+          .from(spec.table)
+          .update(changed)
+          .eq("id", id);
+
+      if (error) throw error;
+
+      snap.set(id, current.get(id));
+
+    }
+
+    for (const id of deletes) {
+
+      const { error } =
+        await sb
+          .from(spec.table)
+          .delete()
+          .eq("id", id);
+
+      if (error) throw error;
+
+      snap.delete(id);
+
+    }
+
+  }
+
+  setNetworkStatus("online");
+
+}
+
+
+/* Turns the attempts into the rows shown on the Results tab. */
+function rebuildResults() {
+
+  db.results =
+    db.attempts
+      .filter(
+        a =>
+          a.startedAt &&
+          (a.status === "SUBMITTED" || a.status === "EXITED")
+      )
+      .map(a => {
+
+        const exam =
+          db.exams.find(e => e.id === a.examID);
+
+        const total = a.total || 0;
+
+        return {
+
+          id: a.id,
+
+          examID: a.examID,
+
+          examTitle:
+            exam ? exam.title : "(deleted exam)",
+
+          studentName: a.studentName,
+
+          score: a.score,
+
+          total,
+
+          percentage:
+            total > 0
+              ? Math.round(a.score / total * 100)
+              : 0,
+
+          status: a.status,
+
+          reason: a.reason,
+
+          submittedAt:
+            a.submittedAt || a.exitedAt || a.joinedAt
+
+        };
+
+      })
+      .sort(
+        (x, y) =>
+          new Date(x.submittedAt) - new Date(y.submittedAt)
+      );
+
+}
+
+
+function resultStatus(result) {
+
+  if (result.status === "SUBMITTED") {
+
+    return { cls: "SUBMITTED", label: "SUBMITTED" };
+
+  }
+
+  if (result.reason === "LEFT_SCREEN") {
+
+    return { cls: "INTERRUPTED", label: "LEFT SCREEN" };
+
+  }
+
+  if (result.reason === "SIGNAL_LOST") {
+
+    return { cls: "INTERRUPTED", label: "SIGNAL LOST" };
+
+  }
+
+  return { cls: "EXITED", label: "TERMINATED" };
+
+}
+
+
+function monitorStatus(attempt) {
+
+  if (attempt.status === "EXITED") {
+
+    if (attempt.reason === "LEFT_SCREEN") {
+
+      return {
+        cls: "INTERRUPTED",
+        label: "INTERRUPTED",
+        note: "Left the exam screen"
+      };
+
+    }
+
+    if (attempt.reason === "SIGNAL_LOST") {
+
+      return {
+        cls: "INTERRUPTED",
+        label: "INTERRUPTED",
+        note: "Signal lost"
+      };
+
+    }
+
+    return {
+      cls: "EXITED",
+      label: "EXITED",
+      note: "Ended by teacher"
+    };
+
+  }
+
+  if (
+    attempt.status === "ANSWERING" &&
+    attempt.lastSeen
+  ) {
+
+    const silent =
+      Math.round(
+        (Date.now() - new Date(attempt.lastSeen)) / 1000
+      );
+
+    if (silent > 15) {
+
+      return {
+        cls: "ANSWERING",
+        label: "ANSWERING",
+        note: `⚠ no signal for ${silent}s`,
+        warn: true
+      };
+
+    }
+
+  }
+
+  if (
+    attempt.status === "SUBMITTED" &&
+    attempt.reason === "TIME_UP"
+  ) {
+
+    return {
+      cls: "SUBMITTED",
+      label: "SUBMITTED",
+      note: "Time was up"
+    };
+
+  }
+
+  return {
+    cls: attempt.status,
+    label: attempt.status,
+    note: ""
+  };
+
+}
+
+
+/* ---------- teacher: pull the latest data ---------- */
+
+function renderAfterPull() {
+
+  const bank =
+    JSON.stringify([db.classes, db.questions]);
+
+  const live =
+    JSON.stringify([db.exams, db.attempts]);
+
+  const bankChanged = bank !== sigBank;
+
+  const liveChanged = live !== sigLive;
+
+  sigBank = bank;
+
+  sigLive = live;
+
+  if (bankChanged) {
+
+    renderTeacherDashboard();
+
+  } else if (liveChanged) {
+
+    renderTeacherLive();
+
+  }
+
+}
+
+
+async function refreshTeacher(full = false) {
+
+  if (!sb || !teacherSignedIn || pulling) return;
+
+  pulling = true;
+
+  const epoch = writeEpoch;
+
+  try {
+
+    const jobs = [fetchTable("exams"), fetchAttempts()];
+
+    if (full) {
+
+      jobs.push(
+        fetchTable("classes"),
+        fetchTable("questions")
+      );
+
+    }
+
+    const [exams, attempts, classes, questions] =
+      await Promise.all(jobs);
+
+    setNetworkStatus("online");
+
+    /* the teacher changed something while we were fetching:
+       drop this copy, the next poll will be up to date */
+    if (epoch !== writeEpoch || pendingWrites > 0) return;
+
+    applyTable("exams", exams);
+
+    db.attempts = attempts;
+
+    if (full) {
+
+      applyTable("classes", classes);
+
+      applyTable("questions", questions);
+
+      lastFullPull = Date.now();
+
+    }
+
+    rebuildResults();
+
+    renderAfterPull();
+
+  } catch (error) {
+
+    console.error("EXAMGUARD refresh failed:", error);
+
+    setNetworkStatus("offline");
+
+  } finally {
+
+    pulling = false;
+
+  }
+
+}
+
+
+function startTeacherPolling() {
+
+  stopTeacherPolling();
+
+  teacherPollTimer =
+    setInterval(() => {
+
+      if (
+        !teacherSignedIn ||
+        document.hidden ||
+        !isScreenActive("teacherDashboard")
+      ) {
+
+        return;
+
+      }
+
+      refreshTeacher(
+        Date.now() - lastFullPull > 20000
+      );
+
+      if (Date.now() - lastSweep > 10000) {
+
+        lastSweep = Date.now();
+
+        /* finishes students who went silent (phone frozen) */
+        sb.rpc("teacher_sweep").then(
+          () => {},
+          () => {}
+        );
+
+      }
+
+    }, CONFIG.TEACHER_POLL_MS);
+
+}
+
+
+function stopTeacherPolling() {
+
+  clearInterval(teacherPollTimer);
+
+  teacherPollTimer = null;
+
+}
 
 
 /* =========================================================
@@ -444,6 +848,27 @@ function showScreen(id) {
 
 function showHome() {
 
+  /* leaving in the middle of an exam ends it */
+  if (examIsRunning()) {
+
+    guardPaused = true;
+
+    const leave =
+      confirm(
+        "Leaving now will END your examination.\n\n" +
+        "Only the answers you already gave will be recorded."
+      );
+
+    guardPaused = false;
+
+    lastTick = Date.now();
+
+    if (leave) endExamForLeaving();
+
+    return;
+
+  }
+
   clearInterval(timerInterval);
 
   leaveLobby();
@@ -453,9 +878,38 @@ function showHome() {
 }
 
 
-function showTeacherLogin() {
+async function showTeacherLogin() {
 
   showScreen("teacherLoginScreen");
+
+  const message = el("loginMessage");
+
+  message.textContent = "";
+
+  if (!sb) {
+
+    message.textContent = SERVER_UNAVAILABLE;
+
+    return;
+
+  }
+
+  /* already signed in on this device? go straight in */
+  try {
+
+    const { data } = await sb.auth.getSession();
+
+    if (data.session && await checkIsTeacher()) {
+
+      await enterTeacherDashboard();
+
+    }
+
+  } catch (error) {
+
+    /* no connection: the sign-in form stays visible */
+
+  }
 
 }
 
@@ -463,6 +917,9 @@ function showTeacherLogin() {
 function showStudentJoin() {
 
   showScreen("studentJoinScreen");
+
+  el("joinMessage").textContent =
+    sb ? "" : SERVER_UNAVAILABLE;
 
 }
 
@@ -485,52 +942,217 @@ function showToast(message) {
 }
 
 
+
 /* =========================================================
    TEACHER LOGIN
    ========================================================= */
 
-function teacherLogin() {
+async function checkIsTeacher() {
 
-  const pin =
-    document
-      .getElementById("teacherPin")
-      .value
-      .trim();
+  const { data, error } = await sb.rpc("is_teacher");
+
+  return !error && data === true;
+
+}
 
 
-  if (pin === db.teacherPin) {
+async function enterTeacherDashboard() {
 
-    document.getElementById(
-      "loginMessage"
-    ).textContent = "";
+  teacherSignedIn = true;
 
-    showScreen("teacherDashboard");
+  sigBank = "";
 
-    renderTeacherDashboard();
+  sigLive = "";
 
-    showToast(
-      "Teacher login successful."
+  lastFullPull = 0;
+
+  showScreen("teacherDashboard");
+
+  await refreshTeacher(true);
+
+  startTeacherPolling();
+
+}
+
+
+async function teacherLogin() {
+
+  const message = el("loginMessage");
+
+  if (!sb) {
+
+    message.textContent = SERVER_UNAVAILABLE;
+
+    return;
+
+  }
+
+  const email =
+    el("teacherEmail").value.trim();
+
+  const password =
+    el("teacherPassword").value;
+
+  if (!email || !password) {
+
+    message.textContent =
+      "Enter your email and password.";
+
+    return;
+
+  }
+
+  const button =
+    document.querySelector(
+      "#teacherLoginScreen .primary-btn"
     );
 
-  } else {
+  button.disabled = true;
 
-    document.getElementById(
-      "loginMessage"
-    ).textContent =
-      "Incorrect teacher PIN.";
+  message.textContent = "";
+
+  try {
+
+    const { error } =
+      await sb.auth.signInWithPassword({ email, password });
+
+    if (error) {
+
+      message.textContent =
+        "Incorrect email or password.";
+
+      return;
+
+    }
+
+    if (!(await checkIsTeacher())) {
+
+      await sb.auth.signOut();
+
+      message.textContent =
+        "This account is not a teacher account.";
+
+      return;
+
+    }
+
+    el("teacherPassword").value = "";
+
+    await enterTeacherDashboard();
+
+    showToast("Teacher login successful.");
+
+  } catch (error) {
+
+    message.textContent =
+      "Could not reach the server. " +
+      "Check your internet connection.";
+
+  } finally {
+
+    button.disabled = false;
 
   }
 
 }
 
 
-function teacherLogout() {
+async function teacherLogout() {
+
+  teacherSignedIn = false;
+
+  stopTeacherPolling();
+
+  if (sb) {
+
+    try {
+
+      await sb.auth.signOut();
+
+    } catch (error) {
+
+      /* signing out locally is enough */
+
+    }
+
+  }
+
+  /* do not leave the teacher's data in memory */
+  db = emptyDatabase();
+
+  snapshot = emptySnapshot();
+
+  sigBank = "";
+
+  sigLive = "";
+
+  renderTeacherDashboard();
 
   showHome();
 
-  showToast(
-    "Teacher session ended."
+  showToast("Teacher session ended.");
+
+}
+
+
+/* ---------- small helpers for the teacher screens ---------- */
+
+function countInterrupted(attempts) {
+
+  return attempts.filter(
+    a =>
+      a.status === "EXITED" &&
+      (a.reason === "LEFT_SCREEN" || a.reason === "SIGNAL_LOST")
+  ).length;
+
+}
+
+
+function countTeacherExited(attempts) {
+
+  return (
+    attempts.filter(a => a.status === "EXITED").length -
+    countInterrupted(attempts)
   );
+
+}
+
+
+function statusCellHTML(attempt) {
+
+  const info = monitorStatus(attempt);
+
+  return `
+    <span class="status ${info.cls}">
+      ${info.label}
+    </span>
+    ${info.note
+      ? `<div class="status-note ${info.warn ? "warn" : ""}">
+          ${escapeHTML(info.note)}
+        </div>`
+      : ""}
+  `;
+
+}
+
+
+/* keeps the teacher's chosen class when the lists refresh */
+function setClassOptions(id, options) {
+
+  const select = el(id);
+
+  const previous = select.value;
+
+  select.innerHTML = options;
+
+  if (
+    previous &&
+    Array.from(select.options).some(o => o.value === previous)
+  ) {
+
+    select.value = previous;
+
+  }
 
 }
 
@@ -771,14 +1393,9 @@ function populateClassSelects() {
         </option>`;
 
 
-  document.getElementById(
-    "questionClass"
-  ).innerHTML = options;
+  setClassOptions("questionClass", options);
 
-
-  document.getElementById(
-    "examClass"
-  ).innerHTML = options;
+  setClassOptions("examClass", options);
 
 }
 
@@ -873,7 +1490,9 @@ function saveQuestion() {
 
     correct,
 
-    points
+    points,
+
+    createdAt: new Date().toISOString()
 
   });
 
@@ -1787,13 +2406,13 @@ function renderMonitor() {
     count("ANSWERING");
 
   document.getElementById("interruptedCount").textContent =
-    count("INTERRUPTED");
+    countInterrupted(attempts);
 
   document.getElementById("submittedCount").textContent =
     count("SUBMITTED");
 
   document.getElementById("exitedCount").textContent =
-    count("EXITED");
+    countTeacherExited(attempts);
 
 
   const body =
@@ -1807,7 +2426,7 @@ function renderMonitor() {
       <tr>
 
         <td
-          colspan="6"
+          colspan="5"
           style="text-align:center;color:#667085"
         >
           No students have joined this examination.
@@ -1874,13 +2493,7 @@ function renderMonitor() {
             </td>
 
             <td>
-              ${escapeHTML(attempt.studentID)}
-            </td>
-
-            <td>
-              <span class="status ${attempt.status}">
-                ${attempt.status}
-              </span>
+              ${statusCellHTML(attempt)}
             </td>
 
             <td>
@@ -1890,7 +2503,9 @@ function renderMonitor() {
             </td>
 
             <td>
-              ${attempt.status === "SUBMITTED"
+              ${attempt.startedAt &&
+                (attempt.status === "SUBMITTED" ||
+                 attempt.status === "EXITED")
                 ? attempt.score
                 : "—"}
             </td>
@@ -1908,8 +2523,7 @@ function renderMonitor() {
 
 }
 
-
-function terminateAttempt(attemptID) {
+async function terminateAttempt(attemptID) {
 
   const attempt =
     db.attempts.find(a => a.id === attemptID);
@@ -1922,7 +2536,8 @@ function terminateAttempt(attemptID) {
     !confirm(
       waiting
         ? `Remove ${attempt.studentName} from the waiting room?`
-        : `Terminate ${attempt.studentName}'s examination?`
+        : `Terminate ${attempt.studentName}'s examination?\n\n` +
+          "Their saved answers will be scored and recorded."
     )
   ) {
 
@@ -1930,181 +2545,185 @@ function terminateAttempt(attemptID) {
 
   }
 
-  attempt.status = "EXITED";
+  try {
 
-  attempt.exitedAt = new Date().toISOString();
+    const { error } =
+      await sb.rpc(
+        "teacher_end_attempt",
+        { p_attempt_id: attemptID }
+      );
 
-  saveDatabase();
+    if (error) throw error;
 
-  renderMonitor();
+    showToast(
+      waiting
+        ? "Student removed from the waiting room."
+        : "Student examination terminated."
+    );
 
-  renderActiveExam();
+    await refreshTeacher(false);
 
-  showToast(
-    waiting
-      ? "Student removed from the waiting room."
-      : "Student examination terminated."
-  );
+  } catch (error) {
+
+    showToast(
+      "Could not update the student. Try again."
+    );
+
+  }
 
 }
 
 
 /* =========================================================
    STUDENT JOIN
+   ---------------------------------------------------------
+   Students never download the question bank or the answer
+   key. Everything goes through server functions that only
+   hand out the student's own exam paper (without answers)
+   and do the scoring on the server.
    ========================================================= */
 
-function joinExam() {
+const JOIN_ERRORS = {
 
-  syncDatabase();
+  not_found:
+    "Exam code not found. Check the code and try again.",
+
+  closed:
+    "This examination is currently closed.",
+
+  name_required:
+    "Please enter your name.",
+
+  no_questions:
+    "This examination has no questions."
+
+};
+
+const START_ERRORS = {
+
+  not_started:
+    "Your teacher has not started the exam yet. Please wait.",
+
+  closed:
+    "This examination has been closed by your teacher.",
+
+  no_questions:
+    "This examination has no questions."
+
+};
+
+
+async function joinExam() {
+
+  const message = el("joinMessage");
+
+  if (!sb) {
+
+    message.textContent = SERVER_UNAVAILABLE;
+
+    return;
+
+  }
 
   const code =
-    document
-      .getElementById(
-        "joinExamCode"
-      )
+    el("joinExamCode")
       .value
       .trim()
       .toUpperCase();
 
-
   const studentName =
-    document
-      .getElementById(
-        "studentName"
-      )
+    el("studentName")
       .value
       .trim();
 
+  if (!code) {
 
-  const studentID =
-    document
-      .getElementById(
-        "studentID"
-      )
-      .value
-      .trim();
+    message.textContent =
+      "Please enter the exam code.";
 
+    return;
 
-  const message =
-    document.getElementById(
-      "joinMessage"
+  }
+
+  if (!studentName) {
+
+    message.textContent =
+      "Please enter your name.";
+
+    return;
+
+  }
+
+  const button =
+    document.querySelector(
+      "#studentJoinScreen .primary-btn"
     );
 
-
-  const exam =
-    db.exams.find(
-      e =>
-        e.code === code
-    );
-
-
-  if (!exam) {
-
-    message.textContent =
-      "Exam code not found.";
-
-    return;
-
-  }
-
-
-  if (
-    exam.status !==
-    "OPEN"
-  ) {
-
-    message.textContent =
-      "This examination is currently closed.";
-
-    return;
-
-  }
-
-
-  if (
-    !studentName ||
-    !studentID
-  ) {
-
-    message.textContent =
-      "Please enter your student name and ID.";
-
-    return;
-
-  }
-
-
-  const questions =
-    db.questions.filter(
-      q =>
-        q.classID ===
-        exam.classID
-    );
-
-
-  if (!questions.length) {
-
-    message.textContent =
-      "This examination has no questions.";
-
-    return;
-
-  }
-
+  button.disabled = true;
 
   message.textContent = "";
 
-  let attempt =
-    db.attempts.find(
-      a =>
-        a.examID === exam.id &&
-        a.studentID === studentID &&
-        a.status === "WAITING"
-    );
+  try {
 
-  if (attempt) {
+    const { data, error } =
+      await sb.rpc(
+        "join_exam",
+        { p_code: code, p_name: studentName }
+      );
 
-    attempt.studentName = studentName;
+    if (error) throw error;
 
-  } else {
+    setNetworkStatus("online");
 
-    attempt = {
+    if (data.error) {
 
-      id: generateID("ATTEMPT"),
+      message.textContent =
+        JOIN_ERRORS[data.error] ||
+        "Could not join this examination.";
 
-      examID: exam.id,
+      return;
 
-      studentName,
+    }
 
-      studentID,
-
-      status: "WAITING",
-
-      questionIDs: [],
-
-      answers: [],
-
-      joinedAt: new Date().toISOString(),
-
-      startedAt: null,
-
-      score: 0
-
+    currentExam = {
+      title: data.title,
+      duration: data.duration
     };
 
-    db.attempts.push(attempt);
+    currentAttempt = {
+      id: data.attempt_id,
+      studentName,
+      status: "WAITING",
+      answers: []
+    };
+
+    examEnding = false;
+
+    pollFailures = 0;
+
+    renderReadyScreen();
+
+    updateReadyState(data);
+
+    showScreen("studentReadyScreen");
+
+    startStudentPolling();
+
+  } catch (error) {
+
+    console.error("EXAMGUARD join failed:", error);
+
+    setNetworkStatus("offline");
+
+    message.textContent =
+      "Could not reach the exam server. " +
+      "Check your internet connection and try again.";
+
+  } finally {
+
+    button.disabled = false;
 
   }
-
-  currentExam = exam;
-
-  currentAttempt = attempt;
-
-  saveDatabase();
-
-  renderReadyScreen();
-
-  showScreen("studentReadyScreen");
 
 }
 
@@ -2113,71 +2732,53 @@ function renderReadyScreen() {
 
   readyState = null;
 
-  document.getElementById("readyExamTitle").textContent =
+  el("readyExamTitle").textContent =
     currentExam.title;
 
-  document.getElementById("readyStudent").textContent =
-    `${currentAttempt.studentName} • ${currentAttempt.studentID}`;
+  el("readyStudent").textContent =
+    currentAttempt.studentName;
 
-  document.getElementById("readyMessage").textContent = "";
-
-  updateReadyState();
+  el("readyMessage").textContent = "";
 
 }
 
 
 /* Keeps the waiting-room screen in step with the teacher. */
-function updateReadyState() {
+function updateReadyState(info) {
 
-  if (!currentAttempt) return;
+  if (!currentAttempt || !info) return;
 
-  const exam =
-    db.exams.find(e => e.id === currentAttempt.examID);
-
-  const banner = document.getElementById("readyBanner");
-  const title = document.getElementById("readyBannerTitle");
-  const text = document.getElementById("readyBannerText");
-  const button = document.getElementById("readyStartBtn");
+  const banner = el("readyBanner");
+  const title = el("readyBannerTitle");
+  const text = el("readyBannerText");
+  const button = el("readyStartBtn");
 
   let state = "waiting";
 
-  if (!exam || exam.status !== "OPEN") {
+  if (info.exam_status !== "OPEN") {
 
     state = "closed";
 
-  } else if (exam.startedAt) {
+  } else if (info.started) {
 
     state = "started";
 
   }
 
+  el("readyExamTitle").textContent = info.title;
 
-  if (exam) {
+  el("readyQuestions").textContent = info.question_count;
 
-    const questions =
-      db.questions.filter(q => q.classID === exam.classID);
+  el("readyDuration").textContent = info.duration;
 
-    document.getElementById("readyQuestions").textContent =
-      questions.length;
+  el("readyPoints").textContent = info.total_points;
 
-    document.getElementById("readyDuration").textContent =
-      exam.duration;
-
-    document.getElementById("readyPoints").textContent =
-      questions.reduce(
-        (sum, q) => sum + Number(q.points),
-        0
-      );
-
-    document.getElementById("readyRandomNote")
-      .classList.toggle("hidden", !exam.randomize);
-
-  }
-
+  el("readyRandomNote")
+    .classList.toggle("hidden", !info.randomize);
 
   banner.className = "ready-banner " + state;
 
-  document.getElementById("readyEyebrow").textContent =
+  el("readyEyebrow").textContent =
     state === "started"
       ? "READY TO BEGIN"
       : state === "closed"
@@ -2186,12 +2787,7 @@ function updateReadyState() {
 
   if (state === "waiting") {
 
-    const inRoom =
-      db.attempts.filter(
-        a =>
-          a.examID === exam.id &&
-          a.status === "WAITING"
-      ).length;
+    const inRoom = info.waiting_count || 1;
 
     title.textContent =
       "Waiting for your teacher to start";
@@ -2232,7 +2828,6 @@ function updateReadyState() {
 
   }
 
-
   if (state !== readyState) {
 
     if (state === "started" && readyState === "waiting") {
@@ -2241,7 +2836,7 @@ function updateReadyState() {
 
     }
 
-    document.getElementById("readyMessage").textContent = "";
+    el("readyMessage").textContent = "";
 
     readyState = state;
 
@@ -2250,29 +2845,153 @@ function updateReadyState() {
 }
 
 
-/* Leaves the waiting room and removes the student from it. */
-function leaveLobby() {
+/* ---------- keeping in touch with the server ---------- */
 
-  if (
-    !currentAttempt ||
-    currentAttempt.status !== "WAITING"
-  ) {
+function startStudentPolling() {
+
+  stopStudentPolling();
+
+  studentPollTimer =
+    setInterval(
+      pollStudent,
+      CONFIG.STUDENT_POLL_MS
+    );
+
+}
+
+
+function stopStudentPolling() {
+
+  clearInterval(studentPollTimer);
+
+  studentPollTimer = null;
+
+}
+
+
+/* Every few seconds: "I'm still here" + ask what changed. */
+async function pollStudent() {
+
+  if (!currentAttempt || examEnding || pollBusy) return;
+
+  pollBusy = true;
+
+  if (pendingAnswers.size) flushAnswers();
+
+  try {
+
+    const { data, error } =
+      await sb.rpc(
+        "poll_attempt",
+        { p_attempt_id: currentAttempt.id }
+      );
+
+    if (error) throw error;
+
+    pollFailures = 0;
+
+    setNetworkStatus("online");
+
+    handlePollResult(data);
+
+  } catch (error) {
+
+    pollFailures++;
+
+    setNetworkStatus("offline");
+
+    if (pollFailures === 3) {
+
+      showToast("Connection problem. Trying again…");
+
+    }
+
+  } finally {
+
+    pollBusy = false;
+
+  }
+
+}
+
+
+function handlePollResult(info) {
+
+  if (!currentAttempt || !info) return;
+
+  if (info.status === "REMOVED") {
+
+    endStudentSession(
+      currentAttempt.status === "ANSWERING"
+        ? "Your examination is no longer available."
+        : "You are no longer in the waiting room. " +
+          "Please join again."
+    );
 
     return;
 
   }
 
-  const id = currentAttempt.id;
+  if (info.status === "WAITING") {
 
-  currentAttempt = null;
+    updateReadyState(info);
 
-  currentExam = null;
+    return;
 
-  db = loadDatabase();
+  }
 
-  db.attempts = db.attempts.filter(a => a.id !== id);
+  if (info.status === "ANSWERING") {
 
-  saveDatabase();
+    /* the server keeps the real clock */
+    if (typeof info.remaining_seconds === "number") {
+
+      examEndsAt =
+        Date.now() + info.remaining_seconds * 1000;
+
+    }
+
+    return;
+
+  }
+
+  /* SUBMITTED or EXITED on the server */
+
+  if (currentAttempt.status === "WAITING") {
+
+    endStudentSession(
+      info.reason === "TEACHER"
+        ? "Your teacher removed you from the waiting room."
+        : "You are no longer in the waiting room."
+    );
+
+    return;
+
+  }
+
+  finishStudentAttempt(info);
+
+}
+
+
+/* Leaves the waiting room and removes the student from it. */
+function leaveLobby() {
+
+  stopStudentPolling();
+
+  if (
+    currentAttempt &&
+    currentAttempt.status === "WAITING"
+  ) {
+
+    sendLeaveBeacon(currentAttempt.id);
+
+    currentAttempt = null;
+
+    currentExam = null;
+
+    readyState = null;
+
+  }
 
 }
 
@@ -2286,7 +3005,34 @@ function backToJoin() {
 }
 
 
-function startExam() {
+function endStudentSession(message) {
+
+  clearInterval(timerInterval);
+
+  stopStudentPolling();
+
+  currentAttempt = null;
+
+  currentExam = null;
+
+  studentQuestions = [];
+
+  pendingAnswers.clear();
+
+  examEnding = false;
+
+  readyState = null;
+
+  showScreen("homeScreen");
+
+  if (message) showToast(message);
+
+}
+
+
+/* ---------- start ---------- */
+
+async function startExam() {
 
   if (
     !currentAttempt ||
@@ -2299,111 +3045,100 @@ function startExam() {
 
   }
 
-  if (syncDatabase() === "removed") {
+  if (startingExam) return;
 
-    handleRemovedByTeacher();
+  const message = el("readyMessage");
 
-    return;
+  const button = el("readyStartBtn");
 
-  }
+  startingExam = true;
 
-  const message =
-    document.getElementById("readyMessage");
+  button.disabled = true;
 
-  const exam =
-    db.exams.find(e => e.id === currentAttempt.examID);
+  message.textContent = "";
 
-  if (!exam) {
+  try {
+
+    const { data, error } =
+      await sb.rpc(
+        "start_attempt",
+        { p_attempt_id: currentAttempt.id }
+      );
+
+    if (error) throw error;
+
+    if (data.error) {
+
+      if (
+        data.error === "removed" ||
+        data.error === "ended"
+      ) {
+
+        endStudentSession(
+          "You are no longer in this examination."
+        );
+
+        return;
+
+      }
+
+      message.textContent =
+        START_ERRORS[data.error] ||
+        "Could not start the examination.";
+
+      pollStudent();
+
+      return;
+
+    }
+
+    studentQuestions = data.paper;
+
+    currentAttempt.answers = data.answers;
+
+    currentAttempt.status = "ANSWERING";
+
+    pendingAnswers.clear();
+
+    currentQuestionIndex = 0;
+
+    examEnding = false;
+
+    submitting = false;
+
+    el("studentExamTitle").textContent =
+      currentExam.title;
+
+    el("studentExamStudent").textContent =
+      currentAttempt.studentName;
+
+    showScreen("studentExamScreen");
+
+    startExamTimer(data.remaining_seconds);
+
+    renderStudentQuestion();
+
+  } catch (error) {
+
+    console.error("EXAMGUARD start failed:", error);
 
     message.textContent =
-      "This examination no longer exists.";
+      "Could not reach the exam server. Try again.";
 
-    return;
+  } finally {
 
-  }
+    startingExam = false;
 
-  if (exam.status !== "OPEN") {
+    if (
+      currentAttempt &&
+      currentAttempt.status === "WAITING"
+    ) {
 
-    message.textContent =
-      "This examination has been closed by your teacher.";
+      button.disabled = false;
 
-    updateReadyState();
-
-    return;
-
-  }
-
-  if (!exam.startedAt) {
-
-    message.textContent =
-      "Your teacher has not started the exam yet. Please wait.";
-
-    updateReadyState();
-
-    return;
+    }
 
   }
-
-  const questions =
-    db.questions.filter(q => q.classID === exam.classID);
-
-  if (!questions.length) {
-
-    message.textContent =
-      "This examination has no questions.";
-
-    return;
-
-  }
-
-  const orderedQuestions =
-    exam.randomize
-      ? shuffle(questions)
-      : questions;
-
-  currentExam = exam;
-
-  currentAttempt.status = "ANSWERING";
-
-  currentAttempt.questionIDs =
-    orderedQuestions.map(q => q.id);
-
-  currentAttempt.answers =
-    Array(orderedQuestions.length).fill(null);
-
-  currentAttempt.startedAt =
-    new Date().toISOString();
-
-  currentAttempt.score = 0;
-
-  const index =
-    db.attempts.findIndex(a => a.id === currentAttempt.id);
-
-  if (index === -1) {
-
-    db.attempts.push(currentAttempt);
-
-  } else {
-
-    db.attempts[index] = currentAttempt;
-
-  }
-
-  saveDatabase();
-
-  currentQuestionIndex = 0;
-
-  document.getElementById("studentExamTitle").textContent =
-    exam.title;
-
-  document.getElementById("studentExamStudent").textContent =
-    `${currentAttempt.studentName} • ${currentAttempt.studentID}`;
-
-  showScreen("studentExamScreen");
-
-  startExamTimer(exam.duration * 60);
-
-  renderStudentQuestion();
 
 }
 
@@ -2421,20 +3156,37 @@ function startExamTimer(
   );
 
 
-  const endTime =
+  examEndsAt =
     Date.now() +
     totalSeconds * 1000;
 
+  lastTick = Date.now();
+
 
   function tick() {
+
+    const now = Date.now();
+
+    /* the timer froze: the phone was asleep or the app was
+       in the background without the browser telling us */
+    if (now - lastTick > CONFIG.RESUME_GAP_MS) {
+
+      endExamForLeaving();
+
+      return;
+
+    }
+
+    lastTick = now;
+
 
     const remaining =
       Math.max(
         0,
         Math.ceil(
           (
-            endTime -
-            Date.now()
+            examEndsAt -
+            now
           ) / 1000
         )
       );
@@ -2450,21 +3202,16 @@ function startExamTimer(
       remaining % 60;
 
 
-    document.getElementById(
-      "examTimer"
-    ).textContent =
+    el("examTimer").textContent =
 
       `${String(minutes).padStart(2,"0")}:` +
       `${String(seconds).padStart(2,"0")}`;
 
 
+    /* keeps trying every second until the server confirms */
     if (
       remaining <= 0
     ) {
-
-      clearInterval(
-        timerInterval
-      );
 
       submitExam(
         true
@@ -2494,19 +3241,10 @@ function renderStudentQuestion() {
   }
 
 
-  const questionID =
-    currentAttempt
-      .questionIDs[
-        currentQuestionIndex
-      ];
-
-
   const question =
-    db.questions.find(
-      q =>
-        q.id ===
-        questionID
-    );
+    studentQuestions[
+      currentQuestionIndex
+    ];
 
 
   if (!question) {
@@ -2521,28 +3259,22 @@ function renderStudentQuestion() {
 
 
   const total =
-    currentAttempt.questionIDs.length;
+    studentQuestions.length;
 
 
   const questionNumber =
     currentQuestionIndex + 1;
 
 
-  document.getElementById(
-    "currentQuestionLabel"
-  ).textContent =
+  el("currentQuestionLabel").textContent =
     `QUESTION ${questionNumber}`;
 
 
-  document.getElementById(
-    "currentQuestion"
-  ).textContent =
+  el("currentQuestion").textContent =
     question.text;
 
 
-  document.getElementById(
-    "questionNumber"
-  ).textContent =
+  el("questionNumber").textContent =
     `Question ${questionNumber} of ${total}`;
 
 
@@ -2553,31 +3285,19 @@ function renderStudentQuestion() {
     ).length;
 
 
-  document.getElementById(
-    "answeredNumber"
-  ).textContent =
+  el("answeredNumber").textContent =
     `${answered} Answered`;
 
 
-  document.getElementById(
-    "navCounter"
-  ).textContent =
+  el("navCounter").textContent =
     `${questionNumber} / ${total}`;
 
 
-  document.getElementById(
-    "examProgress"
-  ).style.width =
+  el("examProgress").style.width =
     `${questionNumber / total * 100}%`;
 
 
-  const choices =
-    document.getElementById(
-      "studentChoices"
-    );
-
-
-  choices.innerHTML =
+  el("studentChoices").innerHTML =
     Object.entries(
       question.choices
     ).map(
@@ -2625,14 +3345,20 @@ function renderStudentQuestion() {
         radio.onchange =
           function() {
 
+            if (examEnding) return;
+
             currentAttempt
               .answers[
                 currentQuestionIndex
               ] =
               this.value;
 
+            /* saved to the server right away */
+            pendingAnswers.add(
+              currentQuestionIndex
+            );
 
-            saveDatabase();
+            flushAnswers();
 
             renderStudentQuestion();
 
@@ -2642,22 +3368,93 @@ function renderStudentQuestion() {
     );
 
 
-  document.getElementById(
-    "nextQuestionBtn"
-  ).classList.toggle(
+  el("nextQuestionBtn").classList.toggle(
     "hidden",
     currentQuestionIndex ===
     total - 1
   );
 
 
-  document.getElementById(
-    "submitExamBtn"
-  ).classList.toggle(
+  el("submitExamBtn").classList.toggle(
     "hidden",
     currentQuestionIndex !==
     total - 1
   );
+
+}
+
+
+/* Sends every answer that the server has not confirmed yet.
+   Returns one shared promise so submitExam() can wait for it. */
+function flushAnswers() {
+
+  if (flushPromise) return flushPromise;
+
+  flushPromise =
+    (async () => {
+
+      try {
+
+        while (
+          pendingAnswers.size &&
+          currentAttempt &&
+          !examEnding
+        ) {
+
+          const index =
+            pendingAnswers.values().next().value;
+
+          const answer =
+            currentAttempt.answers[index];
+
+          const { data, error } =
+            await sb.rpc(
+              "save_answer",
+              {
+                p_attempt_id: currentAttempt.id,
+                p_index: index,
+                p_answer: answer
+              }
+            );
+
+          if (error) throw error;
+
+          /* the exam already ended on the server */
+          if (data.status !== "ANSWERING") {
+
+            pendingAnswers.clear();
+
+            pollStudent();
+
+            break;
+
+          }
+
+          /* only forget it if the student did not change it again */
+          if (
+            currentAttempt &&
+            currentAttempt.answers[index] === answer
+          ) {
+
+            pendingAnswers.delete(index);
+
+          }
+
+        }
+
+      } catch (error) {
+
+        /* the next heartbeat tries again */
+
+      } finally {
+
+        flushPromise = null;
+
+      }
+
+    })();
+
+  return flushPromise;
 
 }
 
@@ -2693,7 +3490,7 @@ function nextQuestion() {
 
   if (
     currentQuestionIndex >=
-    currentAttempt.questionIDs.length - 1
+    studentQuestions.length - 1
   ) {
 
     return;
@@ -2712,12 +3509,19 @@ function nextQuestion() {
    SUBMISSION
    ========================================================= */
 
-function submitExam(
+async function submitExam(
   automatic = false
 ) {
 
-  if (!currentAttempt) {
+  if (
+    !currentAttempt ||
+    currentAttempt.status !== "ANSWERING" ||
+    examEnding ||
+    submitting
+  ) {
+
     return;
+
   }
 
 
@@ -2725,10 +3529,16 @@ function submitExam(
     !automatic
   ) {
 
+    guardPaused = true;
+
     const confirmed =
       confirm(
         "Are you sure you want to submit your examination?"
       );
+
+    guardPaused = false;
+
+    lastTick = Date.now();
 
 
     if (!confirmed) {
@@ -2738,145 +3548,325 @@ function submitExam(
   }
 
 
-  clearInterval(
-    timerInterval
-  );
+  submitting = true;
 
+  try {
 
-  let score = 0;
+    await flushAnswers();
 
-  let totalPoints = 0;
+    if (pendingAnswers.size) {
 
+      throw new Error("unsaved answers");
 
-  currentAttempt
-    .questionIDs
-    .forEach(
-      (questionID,index) => {
+    }
 
-        const question =
-          db.questions.find(
-            q =>
-              q.id ===
-              questionID
-          );
+    if (!currentAttempt) return;
 
-
-        if (!question) {
-          return;
+    const { data, error } =
+      await sb.rpc(
+        "submit_attempt",
+        {
+          p_attempt_id: currentAttempt.id,
+          p_reason:
+            automatic
+              ? "TIME_UP"
+              : "SUBMITTED"
         }
+      );
 
+    if (error) throw error;
 
-        totalPoints +=
-          Number(
-            question.points
-          );
+    handlePollResult(data);
 
+  } catch (error) {
 
-        if (
-          currentAttempt
-            .answers[index] ===
-          question.correct
-        ) {
+    console.error("EXAMGUARD submit failed:", error);
 
-          score +=
-            Number(
-              question.points
-            );
-
-        }
-
-      }
+    showToast(
+      automatic
+        ? "Connection problem. Trying to submit again…"
+        : "Could not submit. Check your connection and try again."
     );
 
+  } finally {
 
-  currentAttempt.score =
-    score;
+    submitting = false;
 
+  }
 
-  currentAttempt.status =
-    "SUBMITTED";
-
-
-  currentAttempt.submittedAt =
-    new Date().toISOString();
+}
 
 
-  const percentage =
-    totalPoints > 0
+/* The server has ended the attempt (submitted, stopped...). */
+function finishStudentAttempt(info) {
 
-      ? Math.round(
-          score /
-          totalPoints *
-          100
-        )
+  examEnding = true;
 
-      : 0;
+  clearInterval(timerInterval);
 
+  stopStudentPolling();
 
-  db.results.push({
-
-    id:
-      generateID("RESULT"),
-
-    examID:
-      currentExam.id,
-
-    examTitle:
-      currentExam.title,
-
-    studentName:
-      currentAttempt.studentName,
-
-    studentID:
-      currentAttempt.studentID,
-
-    score,
-
-    total:
-      totalPoints,
-
-    percentage,
-
-    status:
-      "SUBMITTED",
-
-    submittedAt:
-      currentAttempt.submittedAt
-
-  });
-
-
-  saveDatabase();
-
-
-  document.getElementById(
-    "studentResultMessage"
-  ).textContent =
-
-    `${currentAttempt.studentName}, ` +
-    "your examination has been recorded successfully.";
-
-
-  document.getElementById(
-    "studentFinalScore"
-  ).textContent =
-    `${score}/${totalPoints}`;
-
-
-  document.getElementById(
-    "studentFinalPercentage"
-  ).textContent =
-    `${percentage}%`;
-
+  const name = currentAttempt.studentName;
 
   currentAttempt = null;
 
   currentExam = null;
 
+  studentQuestions = [];
 
-  showScreen(
-    "studentResultScreen"
+  pendingAnswers.clear();
+
+  if (info.status === "SUBMITTED") {
+
+    showSubmittedScreen(
+      name,
+      info.score,
+      info.total
+    );
+
+  } else {
+
+    showStoppedScreen(info.reason);
+
+  }
+
+}
+
+
+function showSubmittedScreen(name, score, total) {
+
+  const percentage =
+    total > 0
+      ? Math.round(score / total * 100)
+      : 0;
+
+  el("studentResultIcon").className = "result-icon";
+
+  el("studentResultIcon").textContent = "✓";
+
+  el("studentResultEyebrow").textContent =
+    "EXAMINATION SUBMITTED";
+
+  el("studentResultTitle").textContent =
+    "Submission Recorded";
+
+  el("studentResultMessage").textContent =
+    `${name}, ` +
+    "your examination has been recorded successfully.";
+
+  el("studentScoreBox").classList.remove("hidden");
+
+  el("studentFinalScore").textContent =
+    `${score}/${total}`;
+
+  el("studentFinalPercentage").textContent =
+    `${percentage}%`;
+
+  showScreen("studentResultScreen");
+
+}
+
+
+const STOPPED_MESSAGES = {
+
+  LEFT_SCREEN:
+    "You left the exam screen, so your examination was " +
+    "stopped automatically. Only the answers you gave " +
+    "before leaving were recorded.",
+
+  SIGNAL_LOST:
+    "Your connection was lost for too long, so your " +
+    "examination was stopped. The answers saved before " +
+    "that were recorded.",
+
+  TEACHER:
+    "Your teacher ended your examination. The answers " +
+    "you gave until then were recorded."
+
+};
+
+
+function showStoppedScreen(reason) {
+
+  el("studentResultIcon").className =
+    "result-icon stopped";
+
+  el("studentResultIcon").textContent = "!";
+
+  el("studentResultEyebrow").textContent =
+    "EXAMINATION STOPPED";
+
+  el("studentResultTitle").textContent =
+    "Examination Ended";
+
+  el("studentResultMessage").textContent =
+    STOPPED_MESSAGES[reason] ||
+    "Your examination was stopped. " +
+    "The answers you gave were recorded.";
+
+  el("studentScoreBox").classList.add("hidden");
+
+  showScreen("studentResultScreen");
+
+}
+
+
+/* =========================================================
+   LEAVE-SCREEN GUARD
+   ---------------------------------------------------------
+   Minimizing the browser, switching apps or tabs, going to
+   the home screen or locking the phone ends the exam at once.
+   Answers are saved the moment they are tapped, so the record
+   only ever contains what the student answered BEFORE leaving.
+   ========================================================= */
+
+function examIsRunning() {
+
+  return (
+    !!currentAttempt &&
+    currentAttempt.status === "ANSWERING" &&
+    !examEnding &&
+    isScreenActive("studentExamScreen")
   );
+
+}
+
+
+/* Tells the server even while the page is being hidden. */
+function sendLeaveBeacon(attemptID) {
+
+  if (!sb || !attemptID) return;
+
+  try {
+
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: CONFIG.SUPABASE_ANON_KEY
+    };
+
+    /* legacy anon keys are JWTs and may be sent as the bearer */
+    if (CONFIG.SUPABASE_ANON_KEY.startsWith("eyJ")) {
+
+      headers.Authorization =
+        "Bearer " + CONFIG.SUPABASE_ANON_KEY;
+
+    }
+
+    fetch(
+      CONFIG.SUPABASE_URL + "/rest/v1/rpc/leave_attempt",
+      {
+        method: "POST",
+        keepalive: true,
+        headers,
+        body: JSON.stringify({ p_attempt_id: attemptID })
+      }
+    ).catch(() => {});
+
+  } catch (error) {
+
+    /* the normal call below and the server timeout still apply */
+
+  }
+
+}
+
+
+/* Normal call, retried when the phone wakes up or reconnects. */
+async function confirmLeave() {
+
+  if (!pendingLeaveID || !sb) return;
+
+  try {
+
+    const { error } =
+      await sb.rpc(
+        "leave_attempt",
+        { p_attempt_id: pendingLeaveID }
+      );
+
+    if (!error) pendingLeaveID = null;
+
+  } catch (error) {
+
+    /* will be retried */
+
+  }
+
+}
+
+
+function endExamForLeaving() {
+
+  if (guardPaused || !examIsRunning()) return;
+
+  examEnding = true;
+
+  clearInterval(timerInterval);
+
+  stopStudentPolling();
+
+  pendingLeaveID = currentAttempt.id;
+
+  sendLeaveBeacon(pendingLeaveID);
+
+  confirmLeave();
+
+  currentAttempt = null;
+
+  currentExam = null;
+
+  studentQuestions = [];
+
+  pendingAnswers.clear();
+
+  showStoppedScreen("LEFT_SCREEN");
+
+}
+
+
+function handleVisibilityChange() {
+
+  if (document.hidden) {
+
+    endExamForLeaving();
+
+  } else {
+
+    confirmLeave();
+
+    /* teacher came back to the tab: catch up right away */
+    if (
+      teacherSignedIn &&
+      isScreenActive("teacherDashboard")
+    ) {
+
+      refreshTeacher(false);
+
+    }
+
+  }
+
+}
+
+
+function handlePageHide() {
+
+  if (examIsRunning()) {
+
+    endExamForLeaving();
+
+    return;
+
+  }
+
+  if (
+    currentAttempt &&
+    currentAttempt.status === "WAITING"
+  ) {
+
+    leaveLobby();
+
+  }
 
 }
 
@@ -2900,7 +3890,7 @@ function renderResults() {
       <tr>
 
         <td
-          colspan="7"
+          colspan="6"
           style="
             text-align:center;
             color:#667085;
@@ -2934,12 +3924,6 @@ function renderResults() {
 
           <td>
             ${escapeHTML(
-              result.studentID
-            )}
-          </td>
-
-          <td>
-            ${escapeHTML(
               result.examTitle
             )}
           </td>
@@ -2957,9 +3941,9 @@ function renderResults() {
           <td>
 
             <span
-              class="status SUBMITTED"
+              class="status ${resultStatus(result).cls}"
             >
-              SUBMITTED
+              ${resultStatus(result).label}
             </span>
 
           </td>
@@ -2999,7 +3983,6 @@ function downloadResults() {
 
     [
       "Student",
-      "Student ID",
       "Exam",
       "Score",
       "Total",
@@ -3018,8 +4001,6 @@ function downloadResults() {
 
         result.studentName,
 
-        result.studentID,
-
         result.examTitle,
 
         result.score,
@@ -3028,7 +4009,7 @@ function downloadResults() {
 
         result.percentage + "%",
 
-        result.status,
+        resultStatus(result).label,
 
         new Date(
           result.submittedAt
@@ -3125,12 +4106,6 @@ function printResults() {
 
           <td>
             ${escapeHTML(
-              result.studentID
-            )}
-          </td>
-
-          <td>
-            ${escapeHTML(
               result.examTitle
             )}
           </td>
@@ -3144,7 +4119,7 @@ function printResults() {
           </td>
 
           <td>
-            ${result.status}
+            ${resultStatus(result).label}
           </td>
 
           <td>
@@ -3235,10 +4210,6 @@ function printResults() {
             </th>
 
             <th>
-              Student ID
-            </th>
-
-            <th>
               Examination
             </th>
 
@@ -3286,168 +4257,6 @@ function printResults() {
 }
 
 
-/* =========================================================
-   RESET DATABASE
-   ========================================================= */
-
-function resetEXAMGUARD() {
-
-  const confirmed =
-    confirm(
-      "This will delete all EXAMGUARD demo data. Continue?"
-    );
-
-
-  if (!confirmed) {
-    return;
-  }
-
-
-  localStorage.removeItem(
-    STORAGE_KEY
-  );
-
-
-  db =
-    structuredClone(
-      defaultDatabase
-    );
-
-
-  createDemoData();
-
-
-  renderTeacherDashboard();
-
-
-  showToast(
-    "EXAMGUARD demo data reset."
-  );
-
-}
-
-
-/* =========================================================
-   DEMO MONITORING
-   ========================================================= */
-
-/*
-   CodePen cannot make multiple physical phones communicate
-   directly through localStorage.
-
-   This function creates demonstration students so that
-   the Teacher > Live Monitoring screen can be tested.
-*/
-
-function createDemoStudents() {
-
-  const exam =
-    db.exams.find(
-      e =>
-        e.status === "OPEN"
-    );
-
-
-  if (!exam) {
-
-    showToast(
-      "Create an open examination first."
-    );
-
-    return;
-
-  }
-
-
-  const existing =
-    db.attempts.filter(
-      a =>
-        a.examID === exam.id
-    ).length;
-
-
-  const names = [
-    "Student 1",
-    "Student 2",
-    "Student 3",
-    "Student 4",
-    "Student 5"
-  ];
-
-
-  for (
-    let i = existing;
-    i < Math.min(existing + 5, 5);
-    i++
-  ) {
-
-    const questions =
-      db.questions.filter(
-        q =>
-          q.classID ===
-          exam.classID
-      );
-
-
-    db.attempts.push({
-
-      id:
-        generateID("DEMO"),
-
-      examID:
-        exam.id,
-
-      studentName:
-        names[i],
-
-      studentID:
-        "DEMO-" +
-        String(i + 1)
-          .padStart(3,"0"),
-
-      status:
-        i === 0
-          ? "ANSWERING"
-          : i === 1
-            ? "ANSWERING"
-            : i === 2
-              ? "SUBMITTED"
-              : "WAITING",
-
-      questionIDs:
-        questions.map(
-          q =>
-            q.id
-        ),
-
-      answers:
-        Array(
-          questions.length
-        ).fill(null),
-
-      score:
-        i === 2
-          ? 3
-          : 0,
-
-      startedAt:
-        new Date().toISOString()
-
-    });
-
-  }
-
-
-  saveDatabase();
-
-  renderTeacherDashboard();
-
-  showToast(
-    "Demo students added."
-  );
-
-}
-
 
 /* =========================================================
    KEYBOARD SHORTCUT
@@ -3480,17 +4289,47 @@ document.addEventListener(
 );
 
 
+
 /* =========================================================
    INITIALIZE
    ========================================================= */
 
-renderTeacherDashboard();
+document.addEventListener(
+  "visibilitychange",
+  handleVisibilityChange
+);
 
-window.addEventListener("storage", handleStorageChange);
+window.addEventListener("pagehide", handlePageHide);
 
-setInterval(handleStorageChange, 1000);
+/* Page Lifecycle API: the browser is about to freeze the page */
+window.addEventListener("freeze", endExamForLeaving);
 
-window.addEventListener("pagehide", leaveLobby);
+window.addEventListener("online", confirmLeave);
+
+if (CONFIG.END_ON_WINDOW_BLUR) {
+
+  window.addEventListener("blur", endExamForLeaving);
+
+}
+
+if (!sb) {
+
+  setNetworkStatus("off");
+
+  console.warn(
+    "EXAMGUARD: Supabase is not set up. " +
+    "Edit CONFIG at the top of script.js (see SETUP.md)."
+  );
+
+  setTimeout(() => {
+
+    showToast(
+      "Supabase is not set up yet. See SETUP.md."
+    );
+
+  }, 600);
+
+}
 
 console.log(
   "EXAMGUARD initialized successfully."

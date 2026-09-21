@@ -1336,3 +1336,37 @@ th {
   }
 
 }
+
+/* ================= SUPABASE / LIVE EXAM ADDITIONS ================= */
+
+.status-pill.offline {
+  background: #c2410c;
+}
+
+.status-pill.off {
+  background: #64748b;
+}
+
+.status-note {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.status-note.warn {
+  color: #b45309;
+}
+
+.result-icon.stopped {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.ready-rules li.rule-warning {
+  color: #991b1b;
+}
+
+.ready-rules li.rule-warning b {
+  color: #991b1b;
+}

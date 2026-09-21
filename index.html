@@ -69,16 +69,25 @@
       <h2>EXAMGUARD Teacher Portal</h2>
 
       <p>
-        Enter your teacher PIN to access examination management.
+        Sign in with your teacher account to manage examinations.
       </p>
 
-      <label>Teacher PIN</label>
+      <label>Email</label>
 
       <input
-        id="teacherPin"
+        id="teacherEmail"
+        type="email"
+        autocomplete="username"
+        placeholder="teacher@school.edu"
+      >
+
+      <label>Password</label>
+
+      <input
+        id="teacherPassword"
         type="password"
-        maxlength="8"
-        placeholder="Enter PIN"
+        autocomplete="current-password"
+        placeholder="Enter password"
       >
 
       <button class="primary-btn full" onclick="teacherLogin()">
@@ -90,10 +99,6 @@
       </button>
 
       <div id="loginMessage" class="form-message"></div>
-
-      <small>
-        Demo PIN: 1234
-      </small>
 
     </div>
 
@@ -580,7 +585,6 @@
 
                 <tr>
                   <th>Student</th>
-                  <th>ID</th>
                   <th>Status</th>
                   <th>Progress</th>
                   <th>Score</th>
@@ -641,7 +645,6 @@
 
                 <tr>
                   <th>Student</th>
-                  <th>ID</th>
                   <th>Exam</th>
                   <th>Score</th>
                   <th>Percentage</th>
@@ -704,13 +707,6 @@
         <input
           id="studentName"
           placeholder="Enter your full name"
-        >
-
-        <label>Student ID</label>
-
-        <input
-          id="studentID"
-          placeholder="Enter student ID"
         >
 
         <button
@@ -803,6 +799,12 @@
           </li>
           <li>
             Your exam is submitted automatically when time runs out.
+          </li>
+          <li class="rule-warning">
+            <b>Do not leave the exam screen.</b>
+            Minimizing the app, switching apps or tabs, or locking
+            your phone ends your exam immediately. Only the answers
+            you gave before that moment are recorded.
           </li>
           <li>
             Your teacher can monitor your exam status.
@@ -951,19 +953,19 @@
 
     <div class="result-screen">
 
-      <div class="result-icon">
+      <div id="studentResultIcon" class="result-icon">
         ✓
       </div>
 
-      <div class="eyebrow">
+      <div id="studentResultEyebrow" class="eyebrow">
         EXAMINATION SUBMITTED
       </div>
 
-      <h2>Submission Recorded</h2>
+      <h2 id="studentResultTitle">Submission Recorded</h2>
 
       <p id="studentResultMessage"></p>
 
-      <div class="final-score">
+      <div id="studentScoreBox" class="final-score">
         <span>Your Score</span>
         <strong id="studentFinalScore">
           0/0
@@ -990,6 +992,8 @@
 
 </div>
 
+  <!-- Supabase client (loaded before script.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
 </body>
 </html>
