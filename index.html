@@ -341,12 +341,12 @@
       <!-- ================= QUESTIONS ================= -->
       <div id="questionsTab" class="teacher-tab">
 
-        <div class="panel">
+        <div class="panel" id="questionFormPanel">
 
           <div class="panel-title">
             <div>
-              <span>QUESTION BANK</span>
-              <h3>Add Multiple-Choice Question</h3>
+              <span id="questionFormLabel">QUESTION BANK</span>
+              <h3 id="questionFormTitle">Add Multiple-Choice Question</h3>
             </div>
           </div>
 
@@ -397,12 +397,25 @@
 
           </div>
 
-          <button
-            class="primary-btn"
-            onclick="addQuestion()"
-          >
-            ADD QUESTION
-          </button>
+          <div class="form-actions">
+
+            <button
+              id="questionSubmitBtn"
+              class="primary-btn"
+              onclick="saveQuestion()"
+            >
+              ADD QUESTION
+            </button>
+
+            <button
+              id="questionCancelBtn"
+              class="secondary-btn hidden"
+              onclick="cancelQuestionEdit()"
+            >
+              CANCEL
+            </button>
+
+          </div>
 
         </div>
 

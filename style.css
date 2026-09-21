@@ -551,6 +551,35 @@ select:focus {
   margin-top: 10px;
 }
 
+.item-card.editing {
+  border-color: var(--blue);
+  background: var(--blue-light);
+}
+
+.editing-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--blue);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  vertical-align: middle;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+#questionFormPanel {
+  scroll-margin-top: 130px;
+}
+
 .mini-btn {
   padding: 7px 10px;
   border: 0;

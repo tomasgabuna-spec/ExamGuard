@@ -20,6 +20,7 @@ let db = loadDatabase();
 let currentExam = null;
 let currentAttempt = null;
 let currentQuestionIndex = 0;
+let editingQuestionID = null;
 let timerInterval = null;
 
 
@@ -633,66 +634,32 @@ function populateClassSelects() {
    QUESTION BANK
    ========================================================= */
 
-function addQuestion() {
+function saveQuestion() {
 
   const classID =
-    document.getElementById(
-      "questionClass"
-    ).value;
-
+    document.getElementById("questionClass").value;
 
   const questionText =
-    document.getElementById(
-      "questionText"
-    ).value.trim();
+    document.getElementById("questionText").value.trim();
 
-
-  const A =
-    document.getElementById(
-      "choiceA"
-    ).value.trim();
-
-
-  const B =
-    document.getElementById(
-      "choiceB"
-    ).value.trim();
-
-
-  const C =
-    document.getElementById(
-      "choiceC"
-    ).value.trim();
-
-
-  const D =
-    document.getElementById(
-      "choiceD"
-    ).value.trim();
-
+  const A = document.getElementById("choiceA").value.trim();
+  const B = document.getElementById("choiceB").value.trim();
+  const C = document.getElementById("choiceC").value.trim();
+  const D = document.getElementById("choiceD").value.trim();
 
   const correct =
-    document.getElementById(
-      "correctAnswer"
-    ).value;
-
+    document.getElementById("correctAnswer").value;
 
   const points =
-    Number(
-      document.getElementById(
-        "questionPoints"
-      ).value
-    ) || 1;
+    Math.max(
+      1,
+      Number(
+        document.getElementById("questionPoints").value
+      ) || 1
+    );
 
 
-  if (
-    !classID ||
-    !questionText ||
-    !A ||
-    !B ||
-    !C ||
-    !D
-  ) {
+  if (!classID || !questionText || !A || !B || !C || !D) {
 
     showToast(
       "Please complete the question and all choices."
@@ -703,22 +670,53 @@ function addQuestion() {
   }
 
 
+  /* ---------- EDIT EXISTING ---------- */
+
+  if (editingQuestionID) {
+
+    const question =
+      db.questions.find(q => q.id === editingQuestionID);
+
+    if (!question) {
+
+      resetQuestionForm();
+
+      showToast("That question no longer exists.");
+
+      return;
+
+    }
+
+    question.classID = classID;
+    question.text = questionText;
+    question.choices = { A, B, C, D };
+    question.correct = correct;
+    question.points = points;
+
+    saveDatabase();
+
+    resetQuestionForm();
+
+    renderTeacherDashboard();
+
+    showToast("Question updated.");
+
+    return;
+
+  }
+
+
+  /* ---------- ADD NEW ---------- */
+
   db.questions.push({
 
-    id:
-      generateID("Q"),
+    id: generateID("Q"),
 
     classID,
 
-    text:
-      questionText,
+    text: questionText,
 
-    choices: {
-      A,
-      B,
-      C,
-      D
-    },
+    choices: { A, B, C, D },
 
     correct,
 
@@ -726,41 +724,141 @@ function addQuestion() {
 
   });
 
-
   saveDatabase();
 
-
-  document.getElementById(
-    "questionText"
-  ).value = "";
-
-
-  document.getElementById(
-    "choiceA"
-  ).value = "";
-
-
-  document.getElementById(
-    "choiceB"
-  ).value = "";
-
-
-  document.getElementById(
-    "choiceC"
-  ).value = "";
-
-
-  document.getElementById(
-    "choiceD"
-  ).value = "";
-
+  document.getElementById("questionText").value = "";
+  document.getElementById("choiceA").value = "";
+  document.getElementById("choiceB").value = "";
+  document.getElementById("choiceC").value = "";
+  document.getElementById("choiceD").value = "";
 
   renderTeacherDashboard();
 
+  showToast("Question added to the question bank.");
 
-  showToast(
-    "Question added to the question bank."
-  );
+}
+
+
+function editQuestion(questionID) {
+
+  const question =
+    db.questions.find(q => q.id === questionID);
+
+  if (!question) return;
+
+  editingQuestionID = questionID;
+
+  document.getElementById("questionClass").value = question.classID;
+  document.getElementById("questionText").value = question.text;
+  document.getElementById("choiceA").value = question.choices.A;
+  document.getElementById("choiceB").value = question.choices.B;
+  document.getElementById("choiceC").value = question.choices.C;
+  document.getElementById("choiceD").value = question.choices.D;
+  document.getElementById("correctAnswer").value = question.correct;
+  document.getElementById("questionPoints").value = question.points;
+
+  document.getElementById("questionFormLabel").textContent =
+    "EDITING QUESTION";
+
+  document.getElementById("questionFormTitle").textContent =
+    "Edit Multiple-Choice Question";
+
+  document.getElementById("questionSubmitBtn").textContent =
+    "SAVE CHANGES";
+
+  document.getElementById("questionCancelBtn")
+    .classList.remove("hidden");
+
+  renderQuestions();
+
+  document.getElementById("questionFormPanel")
+    .scrollIntoView({ behavior: "smooth", block: "start" });
+
+  document.getElementById("questionText").focus({ preventScroll: true });
+
+}
+
+
+function cancelQuestionEdit() {
+
+  resetQuestionForm();
+
+  renderQuestions();
+
+}
+
+
+function resetQuestionForm() {
+
+  editingQuestionID = null;
+
+  document.getElementById("questionText").value = "";
+  document.getElementById("choiceA").value = "";
+  document.getElementById("choiceB").value = "";
+  document.getElementById("choiceC").value = "";
+  document.getElementById("choiceD").value = "";
+  document.getElementById("correctAnswer").value = "A";
+  document.getElementById("questionPoints").value = 1;
+
+  document.getElementById("questionFormLabel").textContent =
+    "QUESTION BANK";
+
+  document.getElementById("questionFormTitle").textContent =
+    "Add Multiple-Choice Question";
+
+  document.getElementById("questionSubmitBtn").textContent =
+    "ADD QUESTION";
+
+  document.getElementById("questionCancelBtn")
+    .classList.add("hidden");
+
+}
+
+
+function deleteQuestion(questionID) {
+
+  const question =
+    db.questions.find(q => q.id === questionID);
+
+  if (!question) return;
+
+  const activeStudents =
+    db.attempts.filter(
+      a =>
+        a.status === "ANSWERING" &&
+        a.questionIDs.includes(questionID)
+    ).length;
+
+  let message =
+    `Delete this question?\n\n"${question.text}"`;
+
+  if (activeStudents > 0) {
+
+    message +=
+      `\n\nWarning: ${activeStudents} student(s) are currently ` +
+      `answering an exam that includes this question.`;
+
+  }
+
+  message +=
+    "\n\nSubmitted results are not affected. This cannot be undone.";
+
+  if (!confirm(message)) return;
+
+  db.questions =
+    db.questions.filter(q => q.id !== questionID);
+
+  if (editingQuestionID === questionID) {
+
+    resetQuestionForm();
+
+  }
+
+  saveDatabase();
+
+  renderTeacherDashboard();
+
+  showToast("Question deleted.");
 
 }
 
@@ -768,9 +866,7 @@ function addQuestion() {
 function renderQuestions() {
 
   const container =
-    document.getElementById(
-      "questionList"
-    );
+    document.getElementById("questionList");
 
 
   if (!db.questions.length) {
@@ -790,42 +886,30 @@ function renderQuestions() {
       (q, index) => {
 
         const cls =
-          db.classes.find(
-            c =>
-              c.id === q.classID
-          );
+          db.classes.find(c => c.id === q.classID);
 
+        const isEditing =
+          q.id === editingQuestionID;
 
         return `
 
-          <div class="item-card">
+          <div class="item-card${isEditing ? " editing" : ""}">
 
             <h4>
               ${index + 1}.
               ${escapeHTML(q.text)}
+              ${isEditing
+                ? '<span class="editing-tag">EDITING</span>'
+                : ""}
             </h4>
 
-            <p>
-              A. ${escapeHTML(q.choices.A)}
-            </p>
+            <p>A. ${escapeHTML(q.choices.A)}</p>
+            <p>B. ${escapeHTML(q.choices.B)}</p>
+            <p>C. ${escapeHTML(q.choices.C)}</p>
+            <p>D. ${escapeHTML(q.choices.D)}</p>
 
             <p>
-              B. ${escapeHTML(q.choices.B)}
-            </p>
-
-            <p>
-              C. ${escapeHTML(q.choices.C)}
-            </p>
-
-            <p>
-              D. ${escapeHTML(q.choices.D)}
-            </p>
-
-            <p>
-              <strong>
-                Correct:
-                ${q.correct}
-              </strong>
+              <strong>Correct: ${q.correct}</strong>
               •
               ${q.points} point(s)
               •
@@ -833,6 +917,24 @@ function renderQuestions() {
                 ? escapeHTML(cls.name)
                 : "Unknown Class"}
             </p>
+
+            <div class="item-actions">
+
+              <button
+                class="mini-btn"
+                onclick="editQuestion('${q.id}')"
+              >
+                ✏️ Edit
+              </button>
+
+              <button
+                class="mini-btn red"
+                onclick="deleteQuestion('${q.id}')"
+              >
+                🗑️ Delete
+              </button>
+
+            </div>
 
           </div>
 
