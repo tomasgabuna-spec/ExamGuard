@@ -2639,10 +2639,29 @@ async function joinExam() {
       .trim()
       .toUpperCase();
 
-  const studentName =
-    el("studentName")
+  const surname =
+    el("studentSurname")
       .value
       .trim();
+
+  const givenName =
+    el("studentGivenName")
+      .value
+      .trim();
+
+  const middleInitial =
+    el("studentMiddleInitial")
+      .value
+      .trim();
+
+  const suffix =
+    el("studentSuffix")
+      .value
+      .trim();
+
+  const sex =
+    el("studentSex")
+      .value;
 
   if (!code) {
 
@@ -2653,14 +2672,32 @@ async function joinExam() {
 
   }
 
-  if (!studentName) {
+  if (!surname || !givenName) {
 
     message.textContent =
-      "Please enter your name.";
+      "Please enter your surname and given name.";
 
     return;
 
   }
+
+  if (!sex) {
+
+    message.textContent =
+      "Please select your sex.";
+
+    return;
+
+  }
+
+  const studentName =
+    [
+      `${surname}, ${givenName}`,
+      middleInitial,
+      suffix
+    ]
+      .filter(Boolean)
+      .join(" ");
 
   const button =
     document.querySelector(
@@ -2676,7 +2713,7 @@ async function joinExam() {
     const { data, error } =
       await sb.rpc(
         "join_exam",
-        { p_code: code, p_name: studentName }
+        { p_code: code, p_name: studentName, p_sex: sex }
       );
 
     if (error) throw error;
@@ -2701,6 +2738,7 @@ async function joinExam() {
     currentAttempt = {
       id: data.attempt_id,
       studentName,
+      sex,
       status: "WAITING",
       answers: []
     };
