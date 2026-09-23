@@ -14,7 +14,7 @@
 
 const CONFIG = {
 
-  SUPABASE_URL: "https://sttlkmsjtetyesxmvkkt.supabase.co/rest/v1/",
+  SUPABASE_URL: "https://sttlkmsjtetyesxmvkkt.supabase.co",
 
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0dGxrbXNqdGV0eWVzeG12a2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NzA5ODUsImV4cCI6MjEwNTU0Njk4NX0.DlhdH0ohAhgS5Knp6TJEi27ge8pyOVv_u_PQR6waIks",
 
