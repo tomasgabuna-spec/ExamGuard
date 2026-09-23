@@ -991,7 +991,11 @@
   <!-- ================= TOAST ================= -->
   <div id="toast" class="toast"></div>
 
-  <div id="breakdownOverlay" class="breakdown-overlay hidden">
+  <div
+    id="breakdownOverlay"
+    class="breakdown-overlay hidden"
+    onclick="if (event.target === this) closeItemBreakdown();"
+  >
 
     <div class="breakdown-panel">
 

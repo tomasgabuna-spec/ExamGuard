@@ -4475,6 +4475,19 @@ document.addEventListener(
       event.key === "Escape"
     ) {
 
+      const overlay =
+        document.getElementById("breakdownOverlay");
+
+      if (
+        overlay &&
+        !overlay.classList.contains("hidden")
+      ) {
+
+        closeItemBreakdown();
+        return;
+
+      }
+
       if (
         document
           .getElementById(
