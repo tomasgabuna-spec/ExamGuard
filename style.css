@@ -1400,12 +1400,28 @@ th {
 
 .breakdown-panel-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px;
   border-bottom: 1px solid #eef1f5;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+.breakdown-panel-header .secondary-btn {
+  flex-shrink: 0;
+}
+
+/* Prevent the page behind the modal from scrolling, which was
+   dragging the whole breakdown panel (including the Close button)
+   off the top of the screen on mobile. */
+body.modal-open {
+  overflow: hidden;
+  height: 100%;
 }
 
 .breakdown-panel-header span {

@@ -4078,6 +4078,8 @@ function openItemBreakdown(resultID) {
   document.getElementById("breakdownOverlay")
     .classList.remove("hidden");
 
+  document.body.classList.add("modal-open");
+
 }
 
 
@@ -4085,6 +4087,8 @@ function closeItemBreakdown() {
 
   document.getElementById("breakdownOverlay")
     .classList.add("hidden");
+
+  document.body.classList.remove("modal-open");
 
 }
 
