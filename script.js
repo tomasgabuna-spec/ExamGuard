@@ -14,7 +14,7 @@
 
 const CONFIG = {
 
-  SUPABASE_URL: "https://sttlkmsjtetyesxmvkkt.supabase.co",
+  SUPABASE_URL: "https://sttlkmsjtetyesxmvkkt.supabase.co/rest/v1/",
 
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0dGxrbXNqdGV0eWVzeG12a2t0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NzA5ODUsImV4cCI6MjEwNTU0Njk4NX0.DlhdH0ohAhgS5Knp6TJEi27ge8pyOVv_u_PQR6waIks",
 
@@ -308,7 +308,7 @@ const TABLE_MAP = {
    through the teacher_end_attempt function instead */
 const ATTEMPT_COLUMNS =
   "id,exam_id,student_name,status,reason,question_ids," +
-  "answers,score,total,joined_at,started_at,submitted_at," +
+  "answers,paper,key,score,total,joined_at,started_at,submitted_at," +
   "exited_at,last_seen";
 
 
@@ -322,6 +322,8 @@ function attemptFromRow(r) {
     reason: r.reason,
     questionIDs: r.question_ids || [],
     answers: r.answers || [],
+    paper: r.paper || [],
+    key: r.key || [],
     score: r.score,
     total: r.total,
     joinedAt: r.joined_at,
@@ -555,6 +557,12 @@ function rebuildResults() {
           score: a.score,
 
           total,
+
+          paper: a.paper || [],
+
+          key: a.key || [],
+
+          answers: a.answers || [],
 
           percentage:
             total > 0
@@ -3890,7 +3898,7 @@ function renderResults() {
       <tr>
 
         <td
-          colspan="6"
+          colspan="7"
           style="
             text-align:center;
             color:#667085;
@@ -3954,10 +3962,129 @@ function renderResults() {
             ).toLocaleString()}
           </td>
 
+          <td>
+            <button
+              class="mini-btn"
+              onclick="openItemBreakdown('${result.id}')"
+            >
+              🔍 View
+            </button>
+          </td>
+
         </tr>
 
       `
     ).join("");
+
+}
+
+
+/* =========================================================
+   PER-STUDENT ITEM BREAKDOWN
+   ========================================================= */
+
+function openItemBreakdown(resultID) {
+
+  const result =
+    db.results.find(r => r.id === resultID);
+
+  if (!result) {
+
+    showToast("That result is no longer available.");
+    return;
+
+  }
+
+  const paper = result.paper || [];
+  const key = result.key || [];
+  const answers = result.answers || [];
+
+  document.getElementById("breakdownTitle").textContent =
+    `${result.studentName} — ${result.examTitle}`;
+
+  document.getElementById("breakdownSummary").textContent =
+    `Score: ${result.score}/${result.total}  (${result.percentage}%)`;
+
+  const body = document.getElementById("breakdownBody");
+
+  if (!paper.length) {
+
+    body.innerHTML =
+      `<div class="empty-state">
+        No item-level data was saved for this attempt
+        (it may predate this feature).
+      </div>`;
+
+  } else {
+
+    body.innerHTML =
+      paper.map((q, i) => {
+
+        const studentAns = answers[i];
+        const correctAns = key[i] ? key[i].c : null;
+        const pts = key[i] ? key[i].p : 1;
+        const isCorrect =
+          studentAns !== null &&
+          studentAns !== undefined &&
+          studentAns === correctAns;
+        const wasAnswered =
+          studentAns !== null && studentAns !== undefined;
+
+        return `
+          <div class="item-card breakdown-item ${
+            isCorrect ? "bd-correct" : "bd-wrong"
+          }">
+
+            <h4>
+              ${i + 1}. ${escapeHTML(q.text)}
+              <span class="status ${
+                isCorrect ? "SUBMITTED" : "INTERRUPTED"
+              }">
+                ${
+                  !wasAnswered
+                    ? "NO ANSWER"
+                    : isCorrect
+                      ? "CORRECT"
+                      : "WRONG"
+                }
+              </span>
+            </h4>
+
+            ${["A", "B", "C", "D"].map(letter => {
+
+              const isStudentPick = studentAns === letter;
+              const isCorrectPick = correctAns === letter;
+
+              let tag = "";
+              if (isCorrectPick) tag += " ✅ correct answer";
+              if (isStudentPick && !isCorrectPick) tag += " ⬅ student's answer";
+              if (isStudentPick && isCorrectPick) tag = " ✅ student's answer (correct)";
+
+              return `<p class="${
+                isCorrectPick ? "bd-key" : isStudentPick ? "bd-pick" : ""
+              }">${letter}. ${escapeHTML(q.choices[letter])}${tag}</p>`;
+
+            }).join("")}
+
+            <p><strong>${pts} point(s)</strong></p>
+
+          </div>
+        `;
+
+      }).join("");
+
+  }
+
+  document.getElementById("breakdownOverlay")
+    .classList.remove("hidden");
+
+}
+
+
+function closeItemBreakdown() {
+
+  document.getElementById("breakdownOverlay")
+    .classList.add("hidden");
 
 }
 
@@ -3978,26 +4105,80 @@ function downloadResults() {
 
   }
 
+  /* Build a stable, per-exam column order for item-level answers.
+     Reference order/content comes from whichever attempt in that
+     exam we see first, then every other attempt's answers are
+     matched back to it by question id (safe even if randomize
+     shuffled each student's question order). */
+  const examColumns = new Map(); // examID -> [{qID, correct}]
+
+  db.results.forEach(result => {
+
+    if (!examColumns.has(result.examID)) {
+      examColumns.set(result.examID, []);
+    }
+
+    const cols = examColumns.get(result.examID);
+    const seen = new Set(cols.map(c => c.qID));
+
+    (result.questionIDs || []).forEach((qID, i) => {
+
+      if (seen.has(qID)) return;
+
+      cols.push({
+        qID,
+        correct: result.key[i] ? result.key[i].c : ""
+      });
+
+      seen.add(qID);
+
+    });
+
+  });
+
+  const baseHeaders = [
+    "Student",
+    "Exam",
+    "Score",
+    "Total",
+    "Percentage",
+    "Status",
+    "Time Submitted"
+  ];
+
+  /* Item columns are only added for the exam that appears first
+     among the results, one block per exam, in first-seen order. */
+  const examOrder = [...examColumns.keys()];
+
+  const itemHeaders = [];
+  const itemHeaderMap = []; // parallel: {examID, qID}
+
+  examOrder.forEach(examID => {
+
+    const exam = db.results.find(r => r.examID === examID);
+    const label = exam ? exam.examTitle : examID;
+
+    examColumns.get(examID).forEach((col, i) => {
+
+      itemHeaders.push(
+        `${label} — Q${i + 1} (Correct: ${col.correct})`
+      );
+
+      itemHeaderMap.push({ examID, qID: col.qID });
+
+    });
+
+  });
 
   const rows = [
-
-    [
-      "Student",
-      "Exam",
-      "Score",
-      "Total",
-      "Percentage",
-      "Status",
-      "Time Submitted"
-    ]
-
+    [...baseHeaders, ...itemHeaders]
   ];
 
 
   db.results.forEach(
     result => {
 
-      rows.push([
+      const base = [
 
         result.studentName,
 
@@ -4015,7 +4196,31 @@ function downloadResults() {
           result.submittedAt
         ).toLocaleString()
 
-      ]);
+      ];
+
+      const items = itemHeaderMap.map(col => {
+
+        if (col.examID !== result.examID) return "";
+
+        const idx = (result.questionIDs || []).indexOf(col.qID);
+
+        if (idx === -1) return "";
+
+        const studentAns = result.answers[idx];
+        const correctAns =
+          result.key[idx] ? result.key[idx].c : null;
+
+        if (studentAns === null || studentAns === undefined) {
+          return "No answer";
+        }
+
+        return studentAns === correctAns
+          ? `${studentAns} (correct)`
+          : `${studentAns} (wrong)`;
+
+      });
+
+      rows.push([...base, ...items]);
 
     }
   );

@@ -1370,3 +1370,93 @@ th {
 .ready-rules li.rule-warning b {
   color: #991b1b;
 }
+
+/* =========================================================
+   PER-STUDENT ITEM BREAKDOWN MODAL
+   ========================================================= */
+
+.breakdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 24px;
+}
+
+.breakdown-panel {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 760px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.breakdown-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.breakdown-panel-header span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #667085;
+}
+
+.breakdown-panel-header h3 {
+  margin: 4px 0 2px;
+}
+
+.breakdown-panel-header p {
+  margin: 0;
+  font-weight: 600;
+  color: #344054;
+}
+
+.breakdown-panel-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.breakdown-item {
+  border-left: 4px solid #d0d5dd;
+  margin-bottom: 14px;
+}
+
+.breakdown-item.bd-correct {
+  border-left-color: #12b76a;
+  background: #f0fdf6;
+}
+
+.breakdown-item.bd-wrong {
+  border-left-color: #f04438;
+  background: #fef3f2;
+}
+
+.breakdown-item h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.breakdown-item p.bd-key {
+  font-weight: 700;
+  color: #027a48;
+}
+
+.breakdown-item p.bd-pick {
+  font-weight: 700;
+  color: #b42318;
+}

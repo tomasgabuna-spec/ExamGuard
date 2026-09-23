@@ -650,6 +650,7 @@
                   <th>Percentage</th>
                   <th>Status</th>
                   <th>Time Submitted</th>
+                  <th>Item Breakdown</th>
                 </tr>
 
               </thead>
@@ -995,5 +996,32 @@
   <!-- Supabase client (loaded before script.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="script.js"></script>
+  <div id="breakdownOverlay" class="breakdown-overlay hidden">
+
+    <div class="breakdown-panel">
+
+      <div class="breakdown-panel-header">
+
+        <div>
+          <span>ITEM BREAKDOWN</span>
+          <h3 id="breakdownTitle">Student — Exam</h3>
+          <p id="breakdownSummary"></p>
+        </div>
+
+        <button
+          class="secondary-btn"
+          onclick="closeItemBreakdown()"
+        >
+          ✕ Close
+        </button>
+
+      </div>
+
+      <div id="breakdownBody" class="breakdown-panel-body"></div>
+
+    </div>
+
+  </div>
+
 </body>
 </html>
