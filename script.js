@@ -4323,169 +4323,48 @@ function downloadResults() {
 
 
 /* =========================================================
-   ITEM ANALYSIS (CSV) — replicates the DepEd-style Item
-   Analysis + MPS workbook: per-item difficulty index,
-   upper/lower 27% discrimination index, mastery bands and
-   an MPS summary, computed from the raw 0/1 correctness
-   matrix (same methodology, not point-weighted).
+   ITEM ANALYSIS (CSV) — a simple correctness matrix: each
+   student's name against each item number, marked 1 if the
+   student answered that item correctly or 0 otherwise (wrong
+   or unanswered).
    ========================================================= */
 
-function difficultyRemark(index) {
-
-  if (index >= 0.86) return "Very Easy";
-  if (index >= 0.71) return "Easy";
-  if (index >= 0.4) return "Average";
-  if (index >= 0.15) return "Difficult";
-  return "Very Difficult";
-
-}
-
-
-function discriminationRemark(index) {
-
-  if (index >= 0.4) return "Very Good Item";
-  if (index >= 0.3) return "Good Item";
-  if (index >= 0.2) return "Subject to Improvement";
-  return "Revise/Reject";
-
-}
-
-
-function masteryLevel(pct) {
-
-  if (pct >= 96) return "Mastered";
-  if (pct >= 86) return "Closely Approximating Mastery";
-  if (pct >= 66) return "Moving Toward Mastery";
-  if (pct >= 35) return "Average";
-  if (pct >= 15) return "Low";
-  if (pct >= 5) return "Very Low";
-  return "Absolutely No Mastery";
-
-}
-
-
-const MASTERY_BANDS = [
-  "Mastered",
-  "Closely Approximating Mastery",
-  "Moving Toward Mastery",
-  "Average",
-  "Low",
-  "Very Low",
-  "Absolutely No Mastery"
-];
-
-
-/* Builds the full item-analysis block (matrix + stats) for one
-   exam's results. Mirrors one "IA-<class>" sheet in the workbook. */
+/* Builds the item-analysis matrix for one exam's results. */
 function buildItemAnalysisBlock(examTitle, examResults) {
 
   /* Canonical item order: first-seen question order, same
      approach as downloadResults(), so shuffled/randomized
      papers still line up by question id. */
-  const items = []; // [{qID, correct}]
+  const items = []; // [{qID}]
   const seen = new Set();
 
   examResults.forEach(r => {
-    (r.questionIDs || []).forEach((qID, i) => {
+    (r.questionIDs || []).forEach(qID => {
       if (seen.has(qID)) return;
       seen.add(qID);
-      items.push({ qID, correct: r.key[i] ? r.key[i].c : "" });
+      items.push({ qID });
     });
   });
 
   const itemCount = items.length;
 
-  /* Per-student raw correctness matrix: 1 correct, 0 wrong,
-     "" no answer — plus a raw (unweighted) total and %. */
+  /* Per-student correctness matrix: 1 correct, 0 for anything
+     else (wrong answer or no response). */
   const students = examResults.map(r => {
 
     const marks = items.map(col => {
 
       const idx = (r.questionIDs || []).indexOf(col.qID);
-      if (idx === -1) return "";
+      if (idx === -1) return 0;
 
       const studentAns = r.answers[idx];
-      if (studentAns === null || studentAns === undefined) return "";
-
       const correctAns = r.key[idx] ? r.key[idx].c : null;
-      return studentAns === correctAns ? 1 : 0;
+
+      return studentAns != null && studentAns === correctAns ? 1 : 0;
 
     });
 
-    const rawTotal = marks.filter(m => m === 1).length;
-    const rawPct =
-      itemCount > 0 ? Math.round((rawTotal / itemCount) * 100) : 0;
-
-    return {
-      name: r.studentName,
-      marks,
-      rawTotal,
-      rawPct
-    };
-
-  });
-
-  const n = students.length;
-  const groupSize = Math.round(n * 0.27);
-
-  /* Upper/lower 27% groups, ranked by raw total — stable sort
-     keeps original (first-seen) order on ties, matching the
-     workbook's RANK()+COUNTIF tie-break trick. */
-  const byDesc = students
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => b.s.rawTotal - a.s.rawTotal || a.i - b.i);
-
-  const byAsc = students
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => a.s.rawTotal - b.s.rawTotal || a.i - b.i);
-
-  const upperSet = new Set(byDesc.slice(0, groupSize).map(x => x.i));
-  const lowerSet = new Set(byAsc.slice(0, groupSize).map(x => x.i));
-
-  /* Per-item stats. */
-  const stats = items.map((col, idx) => {
-
-    let correct = 0, wrong = 0, noResponse = 0;
-    let ugCorrect = 0, ugWrong = 0, lgCorrect = 0, lgWrong = 0;
-
-    students.forEach((s, i) => {
-
-      const m = s.marks[idx];
-
-      if (m === 1) correct++;
-      else if (m === 0) wrong++;
-      else noResponse++;
-
-      if (upperSet.has(i)) {
-        if (m === 1) ugCorrect++;
-        else if (m === 0) ugWrong++;
-      }
-
-      if (lowerSet.has(i)) {
-        if (m === 1) lgCorrect++;
-        else if (m === 0) lgWrong++;
-      }
-
-    });
-
-    const difficultyIndex =
-      n > 0 ? Math.round((correct / n) * 100) / 100 : 0;
-
-    const discriminationIndex =
-      groupSize > 0
-        ? Math.round(
-            ((ugCorrect / groupSize) - (lgCorrect / groupSize)) * 100
-          ) / 100
-        : 0;
-
-    return {
-      correct, wrong, noResponse,
-      difficultyIndex,
-      difficultyRemark: difficultyRemark(difficultyIndex),
-      ugCorrect, ugWrong, lgCorrect, lgWrong,
-      discriminationIndex,
-      discriminationRemark: discriminationRemark(discriminationIndex)
-    };
+    return { name: r.studentName, marks };
 
   });
 
@@ -4493,92 +4372,18 @@ function buildItemAnalysisBlock(examTitle, examResults) {
   const rows = [];
 
   rows.push([`ITEM ANALYSIS — ${examTitle}`]);
-  rows.push(["No. of Takers", n, "No. of Test Items", itemCount]);
-  rows.push([]);
 
-  const header = ["No.", "Name of Learner"];
+  const header = ["Name"];
   for (let i = 1; i <= itemCount; i++) header.push(`Item ${i}`);
-  header.push("Total Score", "% Score", "Mastery Level");
   rows.push(header);
 
-  students.forEach((s, i) => {
-    rows.push([
-      i + 1,
-      s.name,
-      ...s.marks,
-      s.rawTotal,
-      s.rawPct,
-      masteryLevel(s.rawPct)
-    ]);
+  students.forEach(s => {
+    rows.push([s.name, ...s.marks]);
   });
 
   rows.push([]);
 
-  const itemRow = label => [label];
-
-  const testItemNumRow = itemRow("TEST ITEM NUMBER");
-  const correctRow = itemRow("TOTAL NUMBER OF CORRECT RESPONSES");
-  const wrongRow = itemRow("TOTAL # OF WRONG ANSWERS");
-  const noRespRow = itemRow("TOTAL # OF NO RESPONSE");
-  const diffIdxRow = itemRow("DIFFICULTY INDEX");
-  const diffRemRow = itemRow("DIFFICULTY REMARKS");
-  const ugCorrectRow = itemRow("UPPER GROUP (27%) — CORRECT ANSWERS");
-  const ugWrongRow = itemRow("UPPER GROUP (27%) — WRONG ANSWERS");
-  const lgCorrectRow = itemRow("LOWER GROUP (27%) — CORRECT ANSWERS");
-  const lgWrongRow = itemRow("LOWER GROUP (27%) — WRONG ANSWERS");
-  const discIdxRow = itemRow("DISCRIMINATION INDEX");
-  const discRemRow = itemRow("DISCRIMINATION REMARKS");
-
-  stats.forEach((st, i) => {
-    testItemNumRow.push(i + 1);
-    correctRow.push(st.correct);
-    wrongRow.push(st.wrong);
-    noRespRow.push(st.noResponse);
-    diffIdxRow.push(st.difficultyIndex);
-    diffRemRow.push(st.difficultyRemark);
-    ugCorrectRow.push(st.ugCorrect);
-    ugWrongRow.push(st.ugWrong);
-    lgCorrectRow.push(st.lgCorrect);
-    lgWrongRow.push(st.lgWrong);
-    discIdxRow.push(st.discriminationIndex);
-    discRemRow.push(st.discriminationRemark);
-  });
-
-  rows.push(
-    testItemNumRow, correctRow, wrongRow, noRespRow,
-    diffIdxRow, diffRemRow,
-    ugCorrectRow, ugWrongRow, lgCorrectRow, lgWrongRow,
-    discIdxRow, discRemRow
-  );
-
-  rows.push([]);
-  rows.push([]);
-
-  /* Summary numbers this exam contributes to the MPS table. */
-  const highest = n ? Math.max(...students.map(s => s.rawTotal)) : 0;
-  const lowest = n ? Math.min(...students.map(s => s.rawTotal)) : 0;
-  const sumTotal = students.reduce((a, s) => a + s.rawTotal, 0);
-  const mps =
-    n > 0 && itemCount > 0
-      ? Math.round((sumTotal / (n * itemCount)) * 10000) / 100
-      : 0;
-
-  const bandCounts = {};
-  MASTERY_BANDS.forEach(b => { bandCounts[b] = 0; });
-  students.forEach(s => { bandCounts[masteryLevel(s.rawPct)]++; });
-
-  return {
-    rows,
-    summary: {
-      examTitle,
-      takers: n,
-      highestPossible: itemCount,
-      highest,
-      lowest,
-      bandCounts,
-      mps
-    }
-  };
+  return { rows };
 
 }
 
@@ -4596,7 +4401,7 @@ function downloadItemAnalysis() {
   }
 
   /* Group results by exam, preserving first-seen exam order —
-     one block per exam, like one "IA-<class>" sheet each. */
+     one matrix per exam. */
   const examOrder = [];
   const byExam = new Map();
 
@@ -4609,7 +4414,6 @@ function downloadItemAnalysis() {
   });
 
   const rows = [];
-  const summaries = [];
 
   examOrder.forEach(examID => {
 
@@ -4619,65 +4423,8 @@ function downloadItemAnalysis() {
     const block = buildItemAnalysisBlock(examTitle, examResults);
 
     rows.push(...block.rows);
-    summaries.push(block.summary);
 
   });
-
-  /* MPS summary table, one row per exam plus a TOTAL row —
-     mirrors the workbook's "MPS" sheet. */
-  rows.push(["MEAN PERCENTAGE SCORE (MPS) SUMMARY"]);
-
-  const mpsHeader = [
-    "Exam", "No. of Takers", "Highest Possible Score",
-    "Highest Score Obtained", "Lowest Score Obtained"
-  ];
-  MASTERY_BANDS.forEach(b => mpsHeader.push(`${b} (Freq)`, `${b} (%)`));
-  mpsHeader.push("MPS %");
-  rows.push(mpsHeader);
-
-  let totalTakers = 0;
-  const totalBandCounts = {};
-  MASTERY_BANDS.forEach(b => { totalBandCounts[b] = 0; });
-
-  summaries.forEach(s => {
-
-    const row = [
-      s.examTitle, s.takers, s.highestPossible, s.highest, s.lowest
-    ];
-
-    MASTERY_BANDS.forEach(b => {
-      const freq = s.bandCounts[b];
-      const pct = s.takers > 0
-        ? Math.round((freq / s.takers) * 10000) / 100
-        : 0;
-      row.push(freq, pct);
-      totalBandCounts[b] += freq;
-    });
-
-    row.push(s.mps);
-    rows.push(row);
-
-    totalTakers += s.takers;
-
-  });
-
-  const totalRow = ["TOTAL", totalTakers, "", "", ""];
-  MASTERY_BANDS.forEach(b => {
-    const freq = totalBandCounts[b];
-    const pct = totalTakers > 0
-      ? Math.round((freq / totalTakers) * 10000) / 100
-      : 0;
-    totalRow.push(freq, pct);
-  });
-  const overallMps =
-    totalTakers > 0
-      ? Math.round(
-          (summaries.reduce((a, s) => a + s.mps * s.takers, 0) /
-            totalTakers) * 100
-        ) / 100
-      : 0;
-  totalRow.push(overallMps);
-  rows.push(totalRow);
 
 
   const csv =
