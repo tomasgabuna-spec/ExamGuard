@@ -307,7 +307,7 @@ const TABLE_MAP = {
 /* attempts are read-only for the teacher screens; changes go
    through the teacher_end_attempt function instead */
 const ATTEMPT_COLUMNS =
-  "id,exam_id,student_name,status,reason,question_ids," +
+  "id,exam_id,student_name,student_sex,status,reason,question_ids," +
   "answers,paper,key,score,total,joined_at,started_at,submitted_at," +
   "exited_at,last_seen";
 
@@ -318,6 +318,7 @@ function attemptFromRow(r) {
     id: r.id,
     examID: r.exam_id,
     studentName: r.student_name,
+    sex: r.student_sex || "",
     status: r.status,
     reason: r.reason,
     questionIDs: r.question_ids || [],
@@ -554,9 +555,13 @@ function rebuildResults() {
 
           studentName: a.studentName,
 
+          sex: a.sex || "",
+
           score: a.score,
 
           total,
+
+          questionIDs: a.questionIDs || [],
 
           paper: a.paper || [],
 
@@ -4329,7 +4334,10 @@ function downloadResults() {
    or unanswered).
    ========================================================= */
 
-/* Builds the item-analysis matrix for one exam's results. */
+/* Builds the item-analysis matrix for one exam's results:
+   students grouped under MALE / FEMALE section rows (alphabetical
+   within each group), a running "No." column, and one 0/1 column
+   per item — matching the class-record layout teachers use. */
 function buildItemAnalysisBlock(examTitle, examResults) {
 
   /* Canonical item order: first-seen question order, same
@@ -4364,21 +4372,54 @@ function buildItemAnalysisBlock(examTitle, examResults) {
 
     });
 
-    return { name: r.studentName, marks };
+    return { name: r.studentName, sex: r.sex || "", marks };
 
   });
+
+  /* Group by sex — Male section first, then Female, then
+     anything unspecified — alphabetical by name within a group
+     (name is already "Surname, Given Name", so a plain string
+     sort lines up alphabetically by surname). */
+  const groups = [
+    { label: "MALE", list: [] },
+    { label: "FEMALE", list: [] },
+    { label: "UNSPECIFIED", list: [] }
+  ];
+
+  students.forEach(s => {
+    const group =
+      s.sex === "Male" ? groups[0] :
+      s.sex === "Female" ? groups[1] :
+      groups[2];
+    group.list.push(s);
+  });
+
+  groups.forEach(
+    g => g.list.sort((a, b) => a.name.localeCompare(b.name))
+  );
 
   /* ---- rows ---- */
   const rows = [];
 
   rows.push([`ITEM ANALYSIS — ${examTitle}`]);
 
-  const header = ["Name"];
-  for (let i = 1; i <= itemCount; i++) header.push(`Item ${i}`);
+  const header = ["No.", "Name of Learners"];
+  for (let i = 1; i <= itemCount; i++) header.push(i);
   rows.push(header);
 
-  students.forEach(s => {
-    rows.push([s.name, ...s.marks]);
+  let no = 0;
+
+  groups.forEach(group => {
+
+    if (!group.list.length) return;
+
+    rows.push(["", group.label]);
+
+    group.list.forEach(s => {
+      no++;
+      rows.push([no, s.name, ...s.marks]);
+    });
+
   });
 
   rows.push([]);
