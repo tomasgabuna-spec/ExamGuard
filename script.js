@@ -307,7 +307,8 @@ const TABLE_MAP = {
 /* attempts are read-only for the teacher screens; changes go
    through the teacher_end_attempt function instead */
 const ATTEMPT_COLUMNS =
-  "id,exam_id,student_name,student_sex,status,reason,question_ids," +
+  "id,exam_id,student_name,student_sex,student_surname,student_given_name," +
+  "student_middle_initial,student_suffix,status,reason,question_ids," +
   "answers,paper,key,score,total,joined_at,started_at,submitted_at," +
   "exited_at,last_seen";
 
@@ -319,6 +320,10 @@ function attemptFromRow(r) {
     examID: r.exam_id,
     studentName: r.student_name,
     sex: r.student_sex || "",
+    surname: r.student_surname || "",
+    givenName: r.student_given_name || "",
+    middleInitial: r.student_middle_initial || "",
+    suffix: r.student_suffix || "",
     status: r.status,
     reason: r.reason,
     questionIDs: r.question_ids || [],
@@ -556,6 +561,14 @@ function rebuildResults() {
           studentName: a.studentName,
 
           sex: a.sex || "",
+
+          surname: a.surname || "",
+
+          givenName: a.givenName || "",
+
+          middleInitial: a.middleInitial || "",
+
+          suffix: a.suffix || "",
 
           score: a.score,
 
@@ -2718,7 +2731,15 @@ async function joinExam() {
     const { data, error } =
       await sb.rpc(
         "join_exam",
-        { p_code: code, p_name: studentName, p_sex: sex }
+        {
+          p_code: code,
+          p_name: studentName,
+          p_sex: sex,
+          p_surname: surname,
+          p_given_name: givenName,
+          p_middle_initial: middleInitial,
+          p_suffix: suffix
+        }
       );
 
     if (error) throw error;
@@ -4357,7 +4378,10 @@ function buildItemAnalysisBlock(examTitle, examResults) {
   const itemCount = items.length;
 
   /* Per-student correctness matrix: 1 correct, 0 for anything
-     else (wrong answer or no response). */
+     else (wrong answer or no response). Name is built as
+     "Surname, Given name, Suffix, Middle initial" from the
+     individual fields captured at join time; older attempts
+     that predate those fields fall back to the stored full name. */
   const students = examResults.map(r => {
 
     const marks = items.map(col => {
@@ -4372,7 +4396,14 @@ function buildItemAnalysisBlock(examTitle, examResults) {
 
     });
 
-    return { name: r.studentName, sex: r.sex || "", marks };
+    const name =
+      r.surname || r.givenName
+        ? [r.surname, r.givenName, r.suffix, r.middleInitial]
+            .filter(Boolean)
+            .join(", ")
+        : r.studentName;
+
+    return { name, sex: r.sex || "", marks };
 
   });
 
