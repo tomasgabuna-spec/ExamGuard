@@ -1479,11 +1479,3 @@ body.modal-open {
   font-weight: 700;
   color: #b42318;
 }
-
-
-/* Student registration fields */
-#studentJoinScreen .field-optional {
-  font-size: 0.78em;
-  opacity: 0.7;
-  font-weight: 400;
-}

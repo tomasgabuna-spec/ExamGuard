@@ -307,7 +307,7 @@ const TABLE_MAP = {
 /* attempts are read-only for the teacher screens; changes go
    through the teacher_end_attempt function instead */
 const ATTEMPT_COLUMNS =
-  "id,exam_id,student_name,student_gender,student_surname,student_given_name,student_suffix,student_middle_initial,status,reason,question_ids," +
+  "id,exam_id,student_name,status,reason,question_ids," +
   "answers,paper,key,score,total,joined_at,started_at,submitted_at," +
   "exited_at,last_seen";
 
@@ -318,11 +318,6 @@ function attemptFromRow(r) {
     id: r.id,
     examID: r.exam_id,
     studentName: r.student_name,
-    studentGender: r.student_gender,
-    studentSurname: r.student_surname,
-    studentGivenName: r.student_given_name,
-    studentSuffix: r.student_suffix,
-    studentMiddleInitial: r.student_middle_initial,
     status: r.status,
     reason: r.reason,
     questionIDs: r.question_ids || [],
@@ -2644,31 +2639,10 @@ async function joinExam() {
       .trim()
       .toUpperCase();
 
-  const studentGender =
-    el("studentGender")
-      .value;
-
-  const studentSurname =
-    el("studentSurname")
+  const studentName =
+    el("studentName")
       .value
       .trim();
-
-  const studentGivenName =
-    el("studentGivenName")
-      .value
-      .trim();
-
-  const studentSuffix =
-    el("studentSuffix")
-      .value
-      .trim();
-
-  const studentMiddleInitial =
-    el("studentMiddleInitial")
-      .value
-      .trim()
-      .replace(/\s+/g, "")
-      .toUpperCase();
 
   if (!code) {
 
@@ -2679,19 +2653,10 @@ async function joinExam() {
 
   }
 
-  if (!studentGender) {
+  if (!studentName) {
 
     message.textContent =
-      "Please select your gender.";
-
-    return;
-
-  }
-
-  if (!studentSurname || !studentGivenName || !studentMiddleInitial) {
-
-    message.textContent =
-      "Please complete surname, given name, and middle initial.";
+      "Please enter your name.";
 
     return;
 
@@ -2711,14 +2676,7 @@ async function joinExam() {
     const { data, error } =
       await sb.rpc(
         "join_exam",
-        {
-          p_code: code,
-          p_gender: studentGender,
-          p_surname: studentSurname,
-          p_given_name: studentGivenName,
-          p_suffix: studentSuffix,
-          p_middle_initial: studentMiddleInitial
-        }
+        { p_code: code, p_name: studentName }
       );
 
     if (error) throw error;

@@ -710,25 +710,12 @@
           placeholder="Example: GMX482"
         >
 
-        <label>Gender</label>
+        <label>Student Name</label>
 
-        <select id="studentGender">
-          <option value="">Select gender</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
-
-        <label>Surname</label>
-        <input id="studentSurname" placeholder="Enter surname">
-
-        <label>Given Name</label>
-        <input id="studentGivenName" placeholder="Enter given name">
-
-        <label>Suffix <span class="field-optional">(optional)</span></label>
-        <input id="studentSuffix" placeholder="e.g. Jr., Sr., III">
-
-        <label>Middle Initial</label>
-        <input id="studentMiddleInitial" maxlength="3" placeholder="e.g. A.">
+        <input
+          id="studentName"
+          placeholder="Enter your full name"
+        >
 
         <button
           class="primary-btn full"
@@ -1031,7 +1018,7 @@
           class="secondary-btn"
           onclick="closeItemBreakdown()"
         >
-          ✕
+          ✕ Close
         </button>
 
       </div>
