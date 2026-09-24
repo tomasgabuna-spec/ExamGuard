@@ -351,13 +351,24 @@
           <div class="panel-title">
             <div>
               <span id="questionFormLabel">QUESTION BANK</span>
-              <h3 id="questionFormTitle">Add Multiple-Choice Question</h3>
+              <h3 id="questionFormTitle">Add Question</h3>
             </div>
           </div>
 
           <label>Class</label>
 
           <select id="questionClass"></select>
+
+          <label>Question Type</label>
+
+          <select
+            id="questionType"
+            onchange="updateQuestionTypeFields()"
+          >
+            <option value="MULTIPLE_CHOICE">Multiple Choice</option>
+            <option value="TRUE_FALSE">True or False</option>
+            <option value="IDENTIFICATION">Identification</option>
+          </select>
 
           <label>Question</label>
 
@@ -367,27 +378,57 @@
             placeholder="Enter the examination question..."
           ></textarea>
 
-          <div class="choices-grid">
+          <div id="mcFields">
 
-            <input id="choiceA" placeholder="A. Choice">
-            <input id="choiceB" placeholder="B. Choice">
-            <input id="choiceC" placeholder="C. Choice">
-            <input id="choiceD" placeholder="D. Choice">
+            <div class="choices-grid">
+
+              <input id="choiceA" placeholder="A. Choice">
+              <input id="choiceB" placeholder="B. Choice">
+              <input id="choiceC" placeholder="C. Choice">
+              <input id="choiceD" placeholder="D. Choice">
+
+            </div>
+
+            <label>Correct Answer</label>
+
+            <select id="correctAnswer">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+            </select>
+
+          </div>
+
+          <div id="tfFields" class="hidden">
+
+            <label>Correct Answer</label>
+
+            <select id="tfAnswer">
+              <option value="A">True</option>
+              <option value="B">False</option>
+            </select>
+
+          </div>
+
+          <div id="identFields" class="hidden">
+
+            <label>Correct Answer</label>
+
+            <input
+              id="identAnswer"
+              placeholder="Type the correct answer"
+            >
+
+            <small class="field-hint">
+              Capital letters and extra spaces are ignored.
+              To accept more than one answer, separate them with
+              a semicolon (;), for example: Manila; City of Manila
+            </small>
 
           </div>
 
           <div class="form-row">
-
-            <div>
-              <label>Correct Answer</label>
-
-              <select id="correctAnswer">
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-              </select>
-            </div>
 
             <div>
               <label>Points</label>

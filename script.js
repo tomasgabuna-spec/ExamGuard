@@ -205,6 +205,77 @@ function generateExamCode() {
 }
 
 
+/* =========================================================
+   QUESTION TYPES
+   ========================================================= */
+
+const QUESTION_TYPES = {
+  MULTIPLE_CHOICE: "Multiple Choice",
+  TRUE_FALSE: "True or False",
+  IDENTIFICATION: "Identification"
+};
+
+function questionTypeOf(item) {
+
+  const t = item && (item.type || item.t);
+
+  return QUESTION_TYPES[t] ? t : "MULTIPLE_CHOICE";
+
+}
+
+/* typed answers ignore capital letters and extra spaces
+   (the server uses the same rule) */
+function normalizeText(value) {
+
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+}
+
+/* keyEntry is { c: correct, p: points, t: type } */
+function answerMatches(studentAns, keyEntry) {
+
+  if (
+    studentAns === null ||
+    studentAns === undefined ||
+    !keyEntry
+  ) {
+
+    return false;
+
+  }
+
+  if (keyEntry.t === "IDENTIFICATION") {
+
+    const given = normalizeText(studentAns);
+
+    return given !== "" &&
+      String(keyEntry.c ?? "")
+        .split(";")
+        .some(alt => normalizeText(alt) === given);
+
+  }
+
+  return studentAns === keyEntry.c;
+
+}
+
+/* what to show in reports: True/False words for T-F items */
+function displayAnswer(answer, type) {
+
+  if (type === "TRUE_FALSE") {
+
+    return answer === "A" ? "True" : answer === "B" ? "False" : answer;
+
+  }
+
+  return answer;
+
+}
+
+
 function escapeHTML(value) {
 
   return String(value ?? "")
@@ -255,6 +326,7 @@ const TABLE_MAP = {
       text: q.text,
       choices: q.choices,
       correct: q.correct,
+      qtype: q.type || "MULTIPLE_CHOICE",
       points: q.points,
       created_at: q.createdAt || new Date().toISOString()
     }),
@@ -265,6 +337,7 @@ const TABLE_MAP = {
       text: r.text,
       choices: r.choices,
       correct: r.correct,
+      type: r.qtype || "MULTIPLE_CHOICE",
       points: r.points,
       createdAt: r.created_at
     })
@@ -1441,6 +1514,24 @@ function populateClassSelects() {
    QUESTION BANK
    ========================================================= */
 
+/* shows only the fields that belong to the chosen question type */
+function updateQuestionTypeFields() {
+
+  const type =
+    document.getElementById("questionType").value;
+
+  document.getElementById("mcFields")
+    .classList.toggle("hidden", type !== "MULTIPLE_CHOICE");
+
+  document.getElementById("tfFields")
+    .classList.toggle("hidden", type !== "TRUE_FALSE");
+
+  document.getElementById("identFields")
+    .classList.toggle("hidden", type !== "IDENTIFICATION");
+
+}
+
+
 function saveQuestion() {
 
   const classID =
@@ -1449,13 +1540,8 @@ function saveQuestion() {
   const questionText =
     document.getElementById("questionText").value.trim();
 
-  const A = document.getElementById("choiceA").value.trim();
-  const B = document.getElementById("choiceB").value.trim();
-  const C = document.getElementById("choiceC").value.trim();
-  const D = document.getElementById("choiceD").value.trim();
-
-  const correct =
-    document.getElementById("correctAnswer").value;
+  const type =
+    document.getElementById("questionType").value;
 
   const points =
     Math.max(
@@ -1465,12 +1551,58 @@ function saveQuestion() {
       ) || 1
     );
 
+  let choices;
+  let correct;
 
-  if (!classID || !questionText || !A || !B || !C || !D) {
+  if (type === "IDENTIFICATION") {
 
-    showToast(
-      "Please complete the question and all choices."
-    );
+    choices = {};
+
+    correct =
+      document.getElementById("identAnswer").value.trim();
+
+    if (
+      !correct.split(";").some(part => part.trim() !== "")
+    ) {
+
+      showToast("Please enter the correct answer.");
+
+      return;
+
+    }
+
+  } else if (type === "TRUE_FALSE") {
+
+    choices = { A: "True", B: "False" };
+
+    correct =
+      document.getElementById("tfAnswer").value;
+
+  } else {
+
+    const A = document.getElementById("choiceA").value.trim();
+    const B = document.getElementById("choiceB").value.trim();
+    const C = document.getElementById("choiceC").value.trim();
+    const D = document.getElementById("choiceD").value.trim();
+
+    if (!A || !B || !C || !D) {
+
+      showToast("Please complete all four choices.");
+
+      return;
+
+    }
+
+    choices = { A, B, C, D };
+
+    correct =
+      document.getElementById("correctAnswer").value;
+
+  }
+
+  if (!classID || !questionText) {
+
+    showToast("Please select a class and enter the question.");
 
     return;
 
@@ -1496,7 +1628,8 @@ function saveQuestion() {
 
     question.classID = classID;
     question.text = questionText;
-    question.choices = { A, B, C, D };
+    question.type = type;
+    question.choices = choices;
     question.correct = correct;
     question.points = points;
 
@@ -1523,7 +1656,9 @@ function saveQuestion() {
 
     text: questionText,
 
-    choices: { A, B, C, D },
+    type,
+
+    choices,
 
     correct,
 
@@ -1540,6 +1675,7 @@ function saveQuestion() {
   document.getElementById("choiceB").value = "";
   document.getElementById("choiceC").value = "";
   document.getElementById("choiceD").value = "";
+  document.getElementById("identAnswer").value = "";
 
   renderTeacherDashboard();
 
@@ -1559,18 +1695,35 @@ function editQuestion(questionID) {
 
   document.getElementById("questionClass").value = question.classID;
   document.getElementById("questionText").value = question.text;
-  document.getElementById("choiceA").value = question.choices.A;
-  document.getElementById("choiceB").value = question.choices.B;
-  document.getElementById("choiceC").value = question.choices.C;
-  document.getElementById("choiceD").value = question.choices.D;
-  document.getElementById("correctAnswer").value = question.correct;
+  const type = questionTypeOf(question);
+
+  document.getElementById("questionType").value = type;
+
+  document.getElementById("choiceA").value =
+    type === "MULTIPLE_CHOICE" ? question.choices.A : "";
+  document.getElementById("choiceB").value =
+    type === "MULTIPLE_CHOICE" ? question.choices.B : "";
+  document.getElementById("choiceC").value =
+    type === "MULTIPLE_CHOICE" ? question.choices.C : "";
+  document.getElementById("choiceD").value =
+    type === "MULTIPLE_CHOICE" ? question.choices.D : "";
+
+  document.getElementById("correctAnswer").value =
+    type === "MULTIPLE_CHOICE" ? question.correct : "A";
+  document.getElementById("tfAnswer").value =
+    type === "TRUE_FALSE" ? question.correct : "A";
+  document.getElementById("identAnswer").value =
+    type === "IDENTIFICATION" ? question.correct : "";
+
   document.getElementById("questionPoints").value = question.points;
+
+  updateQuestionTypeFields();
 
   document.getElementById("questionFormLabel").textContent =
     "EDITING QUESTION";
 
   document.getElementById("questionFormTitle").textContent =
-    "Edit Multiple-Choice Question";
+    "Edit Question";
 
   document.getElementById("questionSubmitBtn").textContent =
     "SAVE CHANGES";
@@ -1607,13 +1760,17 @@ function resetQuestionForm() {
   document.getElementById("choiceC").value = "";
   document.getElementById("choiceD").value = "";
   document.getElementById("correctAnswer").value = "A";
+  document.getElementById("tfAnswer").value = "A";
+  document.getElementById("identAnswer").value = "";
   document.getElementById("questionPoints").value = 1;
+
+  updateQuestionTypeFields();
 
   document.getElementById("questionFormLabel").textContent =
     "QUESTION BANK";
 
   document.getElementById("questionFormTitle").textContent =
-    "Add Multiple-Choice Question";
+    "Add Question";
 
   document.getElementById("questionSubmitBtn").textContent =
     "ADD QUESTION";
@@ -1712,13 +1869,25 @@ function renderQuestions() {
                 : ""}
             </h4>
 
-            <p>A. ${escapeHTML(q.choices.A)}</p>
-            <p>B. ${escapeHTML(q.choices.B)}</p>
-            <p>C. ${escapeHTML(q.choices.C)}</p>
-            <p>D. ${escapeHTML(q.choices.D)}</p>
+            <p>
+              <span class="status SUBMITTED">${
+                QUESTION_TYPES[questionTypeOf(q)]
+              }</span>
+            </p>
+
+            ${questionTypeOf(q) === "IDENTIFICATION"
+              ? ""
+              : Object.entries(q.choices).map(
+                  ([letter, text]) =>
+                    `<p>${letter}. ${escapeHTML(text)}</p>`
+                ).join("")}
 
             <p>
-              <strong>Correct: ${q.correct}</strong>
+              <strong>Correct: ${
+                questionTypeOf(q) === "TRUE_FALSE"
+                  ? displayAnswer(q.correct, "TRUE_FALSE")
+                  : escapeHTML(q.correct)
+              }</strong>
               •
               ${q.points} point(s)
               •
@@ -3529,6 +3698,8 @@ function startExamTimer(
 }
 
 
+let identSaveTimer = null;
+
 function renderStudentQuestion() {
 
   if (!currentAttempt) {
@@ -3592,42 +3763,107 @@ function renderStudentQuestion() {
     `${questionNumber / total * 100}%`;
 
 
-  el("studentChoices").innerHTML =
-    Object.entries(
-      question.choices
-    ).map(
-      ([letter,text]) => `
+  const type = questionTypeOf(question);
 
-        <label
-          class="student-choice
-          ${selected === letter
-            ? "selected"
-            : ""}"
-        >
+  if (type === "IDENTIFICATION") {
 
-          <input
-            type="radio"
-            name="studentAnswer"
-            value="${letter}"
+    el("studentChoices").innerHTML = `
+
+      <input
+        type="text"
+        id="identInput"
+        class="ident-input"
+        placeholder="Type your answer here"
+        maxlength="200"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        value="${escapeHTML(selected ?? "")}"
+      >
+
+      <p class="ident-hint">
+        Your answer is saved automatically as you type.
+      </p>
+
+    `;
+
+    const input = el("identInput");
+
+    const saveTyped = () => {
+
+      if (examEnding) return;
+
+      const index = currentQuestionIndex;
+
+      const value = input.value.trim();
+
+      currentAttempt.answers[index] =
+        value === "" ? null : value;
+
+      pendingAnswers.add(index);
+
+      /* update the counter without redrawing (keeps the cursor) */
+      el("answeredNumber").textContent =
+        `${currentAttempt.answers.filter(a => a !== null).length} Answered`;
+
+      clearTimeout(identSaveTimer);
+
+      identSaveTimer =
+        setTimeout(flushAnswers, 500);
+
+    };
+
+    input.oninput = saveTyped;
+
+    /* save immediately when leaving the box */
+    input.onblur = () => {
+
+      clearTimeout(identSaveTimer);
+
+      flushAnswers();
+
+    };
+
+  } else {
+
+    el("studentChoices").innerHTML =
+      Object.entries(
+        question.choices
+      ).map(
+        ([letter,text]) => `
+
+          <label
+            class="student-choice
             ${selected === letter
-              ? "checked"
-              : ""}
+              ? "selected"
+              : ""}"
           >
 
-          <span>
+            <input
+              type="radio"
+              name="studentAnswer"
+              value="${letter}"
+              ${selected === letter
+                ? "checked"
+                : ""}
+            >
 
-            <strong>
-              ${letter}.
-            </strong>
+            <span>
 
-            ${escapeHTML(text)}
+              ${type === "TRUE_FALSE"
+                ? ""
+                : `<strong>${letter}.</strong>`}
 
-          </span>
+              ${escapeHTML(text)}
 
-        </label>
+            </span>
 
-      `
-    ).join("");
+          </label>
+
+        `
+      ).join("");
+
+  }
 
 
   document
@@ -4316,12 +4552,65 @@ function openItemBreakdown(resultID) {
         const studentAns = answers[i];
         const correctAns = key[i] ? key[i].c : null;
         const pts = key[i] ? key[i].p : 1;
-        const isCorrect =
-          studentAns !== null &&
-          studentAns !== undefined &&
-          studentAns === correctAns;
+        const type = questionTypeOf(q);
         const wasAnswered =
           studentAns !== null && studentAns !== undefined;
+        const isCorrect =
+          answerMatches(
+            studentAns,
+            key[i] ? { c: key[i].c, t: type } : null
+          );
+
+        let detail;
+
+        if (type === "IDENTIFICATION") {
+
+          detail = `
+            <p class="${isCorrect ? "bd-key" : "bd-pick"}">
+              Student's answer:
+              <strong>${
+                wasAnswered ? escapeHTML(studentAns) : "(none)"
+              }</strong>
+              ${isCorrect ? " ✅" : ""}
+            </p>
+            <p class="bd-key">
+              Accepted answer(s):
+              ${escapeHTML(
+                String(correctAns ?? "")
+                  .split(";")
+                  .map(a => a.trim())
+                  .filter(Boolean)
+                  .join(" / ")
+              )}
+            </p>`;
+
+        } else {
+
+          const letters =
+            type === "TRUE_FALSE" ? ["A", "B"] : ["A", "B", "C", "D"];
+
+          detail = letters.map(letter => {
+
+            const isStudentPick = studentAns === letter;
+            const isCorrectPick = correctAns === letter;
+
+            let tag = "";
+            if (isCorrectPick) tag += " ✅ correct answer";
+            if (isStudentPick && !isCorrectPick) tag += " ⬅ student's answer";
+            if (isStudentPick && isCorrectPick) tag = " ✅ student's answer (correct)";
+
+            const label =
+              type === "TRUE_FALSE"
+                ? escapeHTML(q.choices[letter] || displayAnswer(letter, type))
+                : `${letter}. ${escapeHTML(q.choices[letter])}`;
+
+            return `<p class="${
+              isCorrectPick ? "bd-key" : isStudentPick ? "bd-pick" : ""
+            }">${label}${tag}</p>`;
+
+          }).join("");
+
+        }
 
         return `
           <div class="item-card breakdown-item ${
@@ -4343,21 +4632,13 @@ function openItemBreakdown(resultID) {
               </span>
             </h4>
 
-            ${["A", "B", "C", "D"].map(letter => {
+            <p>
+              <span class="status SUBMITTED">${
+                QUESTION_TYPES[type]
+              }</span>
+            </p>
 
-              const isStudentPick = studentAns === letter;
-              const isCorrectPick = correctAns === letter;
-
-              let tag = "";
-              if (isCorrectPick) tag += " ✅ correct answer";
-              if (isStudentPick && !isCorrectPick) tag += " ⬅ student's answer";
-              if (isStudentPick && isCorrectPick) tag = " ✅ student's answer (correct)";
-
-              return `<p class="${
-                isCorrectPick ? "bd-key" : isStudentPick ? "bd-pick" : ""
-              }">${letter}. ${escapeHTML(q.choices[letter])}${tag}</p>`;
-
-            }).join("")}
+            ${detail}
 
             <p><strong>${pts} point(s)</strong></p>
 
@@ -4511,9 +4792,17 @@ function downloadResults() {
           return "No answer";
         }
 
-        return studentAns === correctAns
-          ? `${studentAns} (correct)`
-          : `${studentAns} (wrong)`;
+        const keyEntry =
+          result.key[idx]
+            ? { c: result.key[idx].c, t: result.key[idx].t }
+            : null;
+
+        const shown =
+          displayAnswer(studentAns, keyEntry && keyEntry.t);
+
+        return answerMatches(studentAns, keyEntry)
+          ? `${shown} (correct)`
+          : `${shown} (wrong)`;
 
       });
 
@@ -4621,7 +4910,7 @@ function buildItemAnalysisBlock(examTitle, examResults) {
       const studentAns = r.answers[idx];
       const correctAns = r.key[idx] ? r.key[idx].c : null;
 
-      return studentAns != null && studentAns === correctAns ? 1 : 0;
+      return answerMatches(studentAns, r.key[idx]) ? 1 : 0;
 
     });
 
