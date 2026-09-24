@@ -1485,3 +1485,8 @@ body.modal-open {
   font-weight: 700;
   color: #b42318;
 }
+
+/* spacing between neighbouring action buttons (table cells) */
+td .mini-btn + .mini-btn {
+  margin-left: 6px;
+}

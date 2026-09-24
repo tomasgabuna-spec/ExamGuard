@@ -1388,6 +1388,17 @@ function renderClasses() {
             ${examCount} exams
           </p>
 
+          <div class="item-actions">
+
+            <button
+              class="mini-btn red"
+              onclick="deleteClass('${cls.id}')"
+            >
+              🗑️ Delete
+            </button>
+
+          </div>
+
         </div>
 
       `;
@@ -2016,6 +2027,13 @@ function renderExams() {
                 : "Open Exam"}
             </button>
 
+            <button
+              class="mini-btn red"
+              onclick="deleteExam('${exam.id}')"
+            >
+              🗑️ Delete
+            </button>
+
           </div>
 
         </div>
@@ -2508,6 +2526,21 @@ function renderMonitor() {
 
         }
 
+        /* a student who is still answering must be terminated
+           first; every other record can be deleted */
+        if (attempt.status !== "ANSWERING") {
+
+          action += ` <button
+            class="mini-btn red"
+            onclick="deleteAttempt('${attempt.id}')"
+          >
+            🗑️ Delete
+          </button>`;
+
+        }
+
+        if (action.startsWith("— ")) action = action.slice(2);
+
         return `
 
           <tr>
@@ -2548,6 +2581,196 @@ function renderMonitor() {
     ).join("");
 
 }
+
+/* =========================================================
+   DELETE (class / exam / student record)
+   ========================================================= */
+
+function deleteClass(classID) {
+
+  const cls = db.classes.find(c => c.id === classID);
+
+  if (!cls) return;
+
+  const questions =
+    db.questions.filter(q => q.classID === classID);
+
+  const exams =
+    db.exams.filter(e => e.classID === classID);
+
+  const examIDs = new Set(exams.map(e => e.id));
+
+  const attempts =
+    db.attempts.filter(a => examIDs.has(a.examID));
+
+  const running =
+    exams.some(e => e.status === "OPEN" && e.startedAt);
+
+  let message =
+    `Delete the class "${cls.name}"?\n\n` +
+    "This will also permanently delete:\n" +
+    `• ${questions.length} question(s)\n` +
+    `• ${exams.length} exam(s)\n` +
+    `• ${attempts.length} student record(s) and results`;
+
+  if (running) {
+
+    message +=
+      "\n\nWarning: an exam of this class is currently running.";
+
+  }
+
+  message += "\n\nThis cannot be undone.";
+
+  if (!confirm(message)) return;
+
+  db.classes = db.classes.filter(c => c.id !== classID);
+
+  db.questions =
+    db.questions.filter(q => q.classID !== classID);
+
+  db.exams =
+    db.exams.filter(e => e.classID !== classID);
+
+  db.attempts =
+    db.attempts.filter(a => !examIDs.has(a.examID));
+
+  if (
+    editingQuestionID &&
+    !db.questions.some(q => q.id === editingQuestionID)
+  ) {
+
+    resetQuestionForm();
+
+  }
+
+  rebuildResults();
+
+  /* the server removes the class's questions, exams and
+     student records automatically (on delete cascade) */
+  saveDatabase();
+
+  renderTeacherDashboard();
+
+  showToast("Class deleted.");
+
+}
+
+
+function deleteExam(examID) {
+
+  const exam = db.exams.find(e => e.id === examID);
+
+  if (!exam) return;
+
+  const attempts =
+    db.attempts.filter(a => a.examID === examID);
+
+  const answering =
+    attempts.filter(a => a.status === "ANSWERING").length;
+
+  let message =
+    `Delete the exam "${exam.title}" (${exam.code})?\n\n` +
+    `This will also permanently delete ${attempts.length} ` +
+    "student record(s) and results of this exam.";
+
+  if (answering > 0) {
+
+    message +=
+      `\n\nWarning: ${answering} student(s) are answering it right now.`;
+
+  }
+
+  message += "\n\nThis cannot be undone.";
+
+  if (!confirm(message)) return;
+
+  db.exams = db.exams.filter(e => e.id !== examID);
+
+  db.attempts =
+    db.attempts.filter(a => a.examID !== examID);
+
+  rebuildResults();
+
+  saveDatabase();
+
+  renderTeacherDashboard();
+
+  showToast("Exam deleted.");
+
+}
+
+
+/* Deletes one student's record (used by Results and Monitoring). */
+async function deleteAttempt(attemptID) {
+
+  const attempt =
+    db.attempts.find(a => a.id === attemptID);
+
+  if (!attempt) return;
+
+  if (attempt.status === "ANSWERING") {
+
+    showToast(
+      "Terminate the student first, then delete the record."
+    );
+
+    return;
+
+  }
+
+  const exam =
+    db.exams.find(e => e.id === attempt.examID);
+
+  if (
+    !confirm(
+      `Delete ${attempt.studentName}'s record` +
+      (exam ? ` for "${exam.title}"` : "") + "?\n\n" +
+      "Their score and answers will be permanently removed. " +
+      "This cannot be undone."
+    )
+  ) {
+
+    return;
+
+  }
+
+  try {
+
+    const { data, error } =
+      await sb
+        .from("attempts")
+        .delete()
+        .eq("id", attemptID)
+        .select("id");
+
+    if (error) throw error;
+
+    if (!data || !data.length) {
+
+      throw new Error("Nothing was deleted (check permissions).");
+
+    }
+
+    db.attempts =
+      db.attempts.filter(a => a.id !== attemptID);
+
+    rebuildResults();
+
+    renderTeacherDashboard();
+
+    showToast("Student record deleted.");
+
+  } catch (error) {
+
+    console.error("EXAMGUARD delete failed:", error);
+
+    showToast("Could not delete the record. Try again.");
+
+  }
+
+}
+
 
 async function terminateAttempt(attemptID) {
 
@@ -4032,6 +4255,12 @@ function renderResults() {
               onclick="openItemBreakdown('${result.id}')"
             >
               🔍 View
+            </button>
+            <button
+              class="mini-btn red"
+              onclick="deleteAttempt('${result.id}')"
+            >
+              🗑️ Delete
             </button>
           </td>
 
