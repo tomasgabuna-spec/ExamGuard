@@ -1519,3 +1519,37 @@ td .mini-btn + .mini-btn {
   font-size: 13px;
   color: var(--muted);
 }
+
+
+/* ================= QUESTION BANK: PER-CLASS VIEW ================= */
+
+.bank-header .primary-btn {
+  white-space: nowrap;
+}
+
+.bank-filter {
+  margin-bottom: 16px;
+}
+
+.bank-filter label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.bank-filter select {
+  width: 100%;
+}
+
+.bank-empty-add {
+  margin-top: 14px;
+}
+
+@media (max-width: 600px) {
+  .bank-header {
+    flex-wrap: wrap;
+  }
+
+  .bank-header .primary-btn {
+    width: 100%;
+  }
+}

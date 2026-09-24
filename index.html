@@ -468,11 +468,27 @@
 
         <div class="panel">
 
-          <div class="panel-title">
+          <div class="panel-title bank-header">
             <div>
               <span>QUESTION BANK</span>
               <h3>Existing Questions</h3>
             </div>
+
+            <button
+              class="primary-btn"
+              onclick="startNewQuestion()"
+            >
+              ➕ ADD QUESTION
+            </button>
+          </div>
+
+          <div class="bank-filter">
+            <label for="questionFilter">Show questions for</label>
+
+            <select
+              id="questionFilter"
+              onchange="onQuestionFilterChange()"
+            ></select>
           </div>
 
           <div id="questionList"></div>

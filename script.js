@@ -1507,6 +1507,22 @@ function populateClassSelects() {
 
   setClassOptions("examClass", options);
 
+  /* question bank filter: every class with its question count */
+  const filterOptions =
+    `<option value="ALL">All classes (${db.questions.length})</option>` +
+    db.classes.map(cls => {
+
+      const count =
+        db.questions.filter(q => q.classID === cls.id).length;
+
+      return `<option value="${cls.id}">${
+        escapeHTML(cls.name)
+      } (${count})</option>`;
+
+    }).join("");
+
+  setClassOptions("questionFilter", filterOptions);
+
 }
 
 
@@ -1637,6 +1653,8 @@ function saveQuestion() {
 
     resetQuestionForm();
 
+    showClassInBank(classID);
+
     renderTeacherDashboard();
 
     showToast("Question updated.");
@@ -1676,6 +1694,8 @@ function saveQuestion() {
   document.getElementById("choiceC").value = "";
   document.getElementById("choiceD").value = "";
   document.getElementById("identAnswer").value = "";
+
+  showClassInBank(classID);
 
   renderTeacherDashboard();
 
@@ -1829,17 +1849,106 @@ function deleteQuestion(questionID) {
 }
 
 
+/* choose which class's questions are listed; the form follows it */
+function onQuestionFilterChange() {
+
+  const filterClass = el("questionFilter").value;
+
+  if (!editingQuestionID && filterClass !== "ALL") {
+
+    el("questionClass").value = filterClass;
+
+  }
+
+  renderQuestions();
+
+}
+
+
+/* keeps the list on the class a question was just saved to */
+function showClassInBank(classID) {
+
+  const filter = el("questionFilter");
+
+  if (
+    filter.value !== "ALL" &&
+    filter.value !== classID
+  ) {
+
+    filter.value = classID;
+
+  }
+
+}
+
+
+/* the "Add Question" button above the list */
+function startNewQuestion() {
+
+  if (!db.classes.length) {
+
+    showToast("Create a class first, then add its questions.");
+
+    return;
+
+  }
+
+  if (editingQuestionID) {
+
+    resetQuestionForm();
+
+  }
+
+  const filterClass = el("questionFilter").value;
+
+  if (filterClass && filterClass !== "ALL") {
+
+    el("questionClass").value = filterClass;
+
+  }
+
+  renderQuestions();
+
+  el("questionFormPanel")
+    .scrollIntoView({ behavior: "smooth", block: "start" });
+
+  el("questionText").focus({ preventScroll: true });
+
+}
+
+
 function renderQuestions() {
 
   const container =
     document.getElementById("questionList");
 
+  const filterClass =
+    el("questionFilter").value || "ALL";
 
-  if (!db.questions.length) {
+  const visible =
+    filterClass === "ALL"
+      ? db.questions
+      : db.questions.filter(q => q.classID === filterClass);
+
+
+  if (!visible.length) {
+
+    const cls =
+      db.classes.find(c => c.id === filterClass);
 
     container.innerHTML =
       `<div class="empty-state">
-        No questions added yet.
+        ${cls
+          ? `No questions for <strong>${escapeHTML(cls.name)}</strong> yet.`
+          : "No questions added yet."}
+        <div class="bank-empty-add">
+          <button
+            class="primary-btn"
+            onclick="startNewQuestion()"
+          >
+            ➕ ADD QUESTION
+          </button>
+        </div>
       </div>`;
 
     return;
@@ -1848,7 +1957,7 @@ function renderQuestions() {
 
 
   container.innerHTML =
-    db.questions.map(
+    visible.map(
       (q, index) => {
 
         const cls =
