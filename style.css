@@ -1490,13 +1490,3 @@ body.modal-open {
 td .mini-btn + .mini-btn {
   margin-left: 6px;
 }
-
-/* delete button inside the status summary cards */
-.monitor-summary .mini-btn {
-  margin-top: 10px;
-}
-
-.monitor-summary .mini-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
